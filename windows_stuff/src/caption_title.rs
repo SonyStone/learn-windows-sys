@@ -9,8 +9,8 @@ use windows::{
         },
         UI::{
             Controls::{
-                CloseThemeData, DrawThemeTextEx, GetThemeSysFont, OpenThemeData, DTTOPTS,
-                DTT_COMPOSITED, DTT_GLOWSIZE, HTHEME, TMT_CAPTIONFONT,
+                CloseThemeData, DrawThemeText, DrawThemeTextEx, GetThemeSysFont, OpenThemeData,
+                DTTOPTS, DTT_COMPOSITED, DTT_GLOWSIZE, HTHEME, TMT_CAPTIONFONT,
             },
             WindowsAndMessaging::*,
         },
@@ -38,7 +38,7 @@ pub unsafe fn paint_custom_caption(window: HWND, hdc: HDC) {
             dib.bmiHeader.biWidth = cx;
             dib.bmiHeader.biHeight = -cy;
             dib.bmiHeader.biPlanes = 1;
-            dib.bmiHeader.biBitCount = 32;
+            dib.bmiHeader.biBitCount = 0;
             dib.bmiHeader.biCompression = BI_RGB.0 as u32;
 
             let hbm = CreateDIBSection(hdc, &dib, DIB_RGB_COLORS, std::ptr::null_mut(), None, 0);
@@ -68,13 +68,21 @@ pub unsafe fn paint_custom_caption(window: HWND, hdc: HDC) {
                 rc_paint.left += 8;
                 rc_paint.bottom = 50;
 
+                println!(
+                    "h_theme: {:?}, hdc_paint: {:?}, sz_title: {:?}",
+                    h_theme, hdc_paint, sz_title
+                );
+                println!("flags {:?}", DT_LEFT | DT_WORD_ELLIPSIS);
+                println!("flags {:?}", DT_LEFT | DT_WORD_ELLIPSIS);
+                println!("rc_paint {:?}", rc_paint);
+                println!("dtt_opts {:?}", dtt_opts);
+
                 DrawThemeTextEx(
                     h_theme,
                     hdc_paint,
                     0,
                     0,
-                    sz_title,
-                    -1,
+                    &sz_title,
                     DT_LEFT | DT_WORD_ELLIPSIS,
                     &mut rc_paint,
                     Some(&dtt_opts),
