@@ -8,10 +8,7 @@ use windows::{
         Foundation::{HMODULE, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
         Graphics::{
             Dwm::{DwmDefWindowProc, DwmExtendFrameIntoClientArea, DwmIsCompositionEnabled},
-            Gdi::{
-                BeginPaint, EndPaint, FillRect, GetStockObject, ValidateRect, BLACK_BRUSH, HBRUSH,
-                PAINTSTRUCT,
-            },
+            Gdi::{BeginPaint, EndPaint, GetStockObject, DKGRAY_BRUSH, HBRUSH, PAINTSTRUCT},
         },
         System::LibraryLoader::GetModuleHandleW,
         UI::{Controls::MARGINS, WindowsAndMessaging::*},
@@ -89,19 +86,19 @@ extern "system" fn wndproc(window: HWND, message: u32, wparam: WPARAM, lparam: L
 fn app_win_proc(window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     unsafe {
         match message {
-            WM_PAINT => {
-                println!("WM_PAINT");
-                ValidateRect(window, None);
+            // WM_PAINT => {
+            //     println!("WM_PAINT");
+            //     ValidateRect(window, None);
 
-                let mut ps = PAINTSTRUCT::default();
-                let hdc = BeginPaint(window, &mut ps);
+            //     let mut ps = PAINTSTRUCT::default();
+            //     let hdc = BeginPaint(window, &mut ps);
 
-                FillRect(hdc, &mut ps.rcPaint, HBRUSH(0));
+            //     FillRect(hdc, &mut ps.rcPaint, HBRUSH(0));
 
-                EndPaint(window, &mut ps);
+            //     EndPaint(window, &mut ps);
 
-                LRESULT(0)
-            }
+            //     LRESULT(0)
+            // }
             WM_LBUTTONDOWN => {
                 println!("WM_LBUTTONDOWN");
                 LRESULT(0)
@@ -123,7 +120,7 @@ unsafe fn register_window_class() -> (PCWSTR, HMODULE) {
         hCursor: LoadCursorW(None, IDC_ARROW).unwrap(),
         hInstance: instance,
         lpszClassName: class_name,
-        hbrBackground: HBRUSH(GetStockObject(BLACK_BRUSH).0),
+        hbrBackground: HBRUSH(GetStockObject(DKGRAY_BRUSH).0),
         style: CS_HREDRAW | CS_VREDRAW,
         lpfnWndProc: Some(wndproc),
         ..Default::default()
@@ -151,7 +148,7 @@ unsafe fn custom_caption_proc(
     // Handle window creation.
     if message == WM_CREATE {
         let mut rc_client = RECT::default();
-        GetWindowRect(window, &mut rc_client);
+        GetWindowRect(window, &mut rc_client).unwrap();
 
         // Inform application of the frame change.
         SetWindowPos(
@@ -162,7 +159,8 @@ unsafe fn custom_caption_proc(
             caption_title::rect_width(rc_client),
             caption_title::rect_height(rc_client),
             SWP_FRAMECHANGED,
-        );
+        )
+        .unwrap();
 
         f_call_dwp = true;
         l_ret = LRESULT(0);
@@ -186,7 +184,7 @@ unsafe fn custom_caption_proc(
     if message == WM_PAINT {
         let mut ps = PAINTSTRUCT::default();
         let hdc = BeginPaint(window, &mut ps);
-        caption_title::paint_custom_caption(window, hdc);
+        caption_title::paint_custom_caption(window, hdc).unwrap();
         EndPaint(window, &mut ps);
 
         f_call_dwp = true;
@@ -197,9 +195,9 @@ unsafe fn custom_caption_proc(
     if (message == WM_NCCALCSIZE) && (wparam == WPARAM(1)) {
         if wparam == WPARAM(1) {
             let mut pncsp = NCCALCSIZE_PARAMS::default();
-            pncsp.rgrc[0].left = pncsp.rgrc[0].left + 0;
+            pncsp.rgrc[0].left = pncsp.rgrc[0].left + LEFTEXTENDWIDTH;
             pncsp.rgrc[0].top = pncsp.rgrc[0].top + 0;
-            pncsp.rgrc[0].right = pncsp.rgrc[0].right - 0;
+            pncsp.rgrc[0].right = pncsp.rgrc[0].right - RIGHTEXTENDWIDTH;
             pncsp.rgrc[0].bottom = pncsp.rgrc[0].bottom - 0;
         }
 
@@ -224,12 +222,6 @@ unsafe fn custom_caption_proc(
 unsafe fn hit_test_nca(window: HWND, _: WPARAM, lparam: LPARAM) -> LRESULT {
     // Get the point coordinates for the hit test.
 
-    println!(
-        "GET_Y_LPARAM, {:?} | {:?}",
-        get_x_lparam(lparam.0),
-        get_y_lparam(lparam.0)
-    );
-
     // todo get x and y from  lparam (GET_Y_LPARAM)
     let pt_mouse = POINT {
         x: get_x_lparam(lparam.0) as i32,
@@ -238,7 +230,7 @@ unsafe fn hit_test_nca(window: HWND, _: WPARAM, lparam: LPARAM) -> LRESULT {
 
     // Get the window rectangle.
     let mut rc_window = RECT::default();
-    GetWindowRect(window, &mut rc_window);
+    GetWindowRect(window, &mut rc_window).unwrap();
 
     // Get the frame rectangle, adjusted for the style without a caption.
     let mut rc_frame = RECT::default();
@@ -247,7 +239,8 @@ unsafe fn hit_test_nca(window: HWND, _: WPARAM, lparam: LPARAM) -> LRESULT {
         WS_OVERLAPPEDWINDOW & !WS_CAPTION,
         false,
         WINDOW_EX_STYLE::default(),
-    );
+    )
+    .unwrap();
 
     // Determine if the hit test is for resizing. Default middle (1,1).
     let mut u_row = 1;
