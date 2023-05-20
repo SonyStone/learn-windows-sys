@@ -1,5 +1,3 @@
-use std::os::raw::c_void;
-
 use windows::{
     core::*,
     Win32::{
@@ -31,7 +29,7 @@ pub unsafe fn paint_custom_caption(window: HWND, hdc: HDC) -> Result<()> {
     if DwmGetWindowAttribute(
         window,
         DWMWA_CAPTION_BUTTON_BOUNDS,
-        &mut rect_caption_button_bounds as *mut _ as *mut c_void,
+        &mut rect_caption_button_bounds as *mut _ as *mut std::os::raw::c_void,
         std::mem::size_of::<RECT>() as u32,
     )
     .is_ok()
@@ -41,6 +39,7 @@ pub unsafe fn paint_custom_caption(window: HWND, hdc: HDC) -> Result<()> {
         let h_theme: HTHEME = OpenThemeData(None, w!("CompositedWindow::Window"));
         if !h_theme.is_invalid() {
             let hdc_paint = CreateCompatibleDC(hdc);
+
             if !hdc_paint.is_invalid() {
                 let cx = rect_width(rc_client);
                 let cy = rect_height(rc_client);
@@ -70,6 +69,7 @@ pub unsafe fn paint_custom_caption(window: HWND, hdc: HDC) -> Result<()> {
 
                     // Setup the theme drawing options.
                     let dtt_opts = DTTOPTS {
+                        dwSize: std::mem::size_of::<DTTOPTS>() as u32,
                         dwFlags: DTT_COMPOSITED | DTT_GLOWSIZE,
                         iGlowSize: 15,
                         ..Default::default()
@@ -91,20 +91,9 @@ pub unsafe fn paint_custom_caption(window: HWND, hdc: HDC) -> Result<()> {
                         bottom: 50,
                     };
 
-                    println!("h_font_old {:?}", h_font_old);
+                    let sz_title: PCWSTR = w!("Custom Title");
+                    let sz_title = sz_title.as_wide();
 
-                    // let sz_title: PCWSTR = w!("Custom Title");
-                    // let sz_title = sz_title.as_wide();
-
-                    let sz_title = &[67, 117, 115, 116, 111, 109, 32, 84, 105, 116, 108, 101, 0];
-
-                    println!("h_theme {:?}", h_theme);
-                    println!("hdc_paint {:?}", hdc_paint);
-                    println!("sz_title {:?}, {:?}", sz_title, sz_title.len());
-                    println!("rc_paint {:?}", rc_paint);
-                    println!("dtt_opts {:?}", dtt_opts);
-
-                    // ! Error goes here !
                     DrawThemeTextEx(
                         h_theme,
                         hdc_paint,
