@@ -40,22 +40,12 @@ fn get_y_lparam(lparam: LPARAM) -> i32 {
     (lparam.0 >> 16) as i32
 }
 
-#[derive(Debug)]
+/// Determine if the hit test is for resizing. Default middle (1,1).
+#[derive(Debug, Default)]
 struct HitTest {
     row: WmNchittest,
     column: WmNchittest,
     on_resize_border: bool,
-}
-
-impl Default for HitTest {
-    /// Determine if the hit test is for resizing. Default middle (1,1).
-    fn default() -> Self {
-        Self {
-            row: WmNchittest::NoWhere,
-            column: WmNchittest::NoWhere,
-            on_resize_border: false,
-        }
-    }
 }
 
 impl HitTest {
@@ -106,8 +96,9 @@ impl HitTest {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 enum WmNchittest {
+    #[default]
     NoWhere = HTNOWHERE as isize,
     Caption = HTCAPTION as isize,
     Left = HTLEFT as isize,

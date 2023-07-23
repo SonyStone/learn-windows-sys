@@ -1,7 +1,7 @@
 mod caption_title;
 mod hit_test_nca;
-mod register_window_class;
-mod window_state;
+pub mod register_window_class;
+pub mod window_state;
 
 use window_state::WindowFlags;
 use windows::{

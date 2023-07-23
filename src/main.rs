@@ -1,5 +1,4 @@
-use windows_stuff::run;
-
 fn main() {
-    run();
+    // windows_stuff::run();
+    windows_reactive::run();
 }
