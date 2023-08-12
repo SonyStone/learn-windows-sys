@@ -56,6 +56,11 @@ impl<'a> WindowBuilder<'a> {
         self.minimized = true;
         self
     }
+
+    pub fn maximized(mut self) -> Self {
+        self.maximized = true;
+        self
+    }
 }
 
 pub fn window() -> WindowBuilder<'static> {

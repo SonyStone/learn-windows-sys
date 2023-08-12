@@ -1,14 +1,15 @@
+use std::{ffi::OsString, fmt::Debug, os::windows::prelude::OsStringExt};
+
 use windows::{
-    core::{IntoParam, Param, PCWSTR},
-    w,
+    core::IntoParam,
     Win32::{
         Foundation::{HMODULE, HWND},
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
-            CreateWindowExW, GetWindowLongPtrW, MoveWindow, SetWindowLongPtrW, SetWindowPlacement,
-            SetWindowPos, SetWindowTextW, CREATESTRUCTW, GWLP_HINSTANCE, GWLP_ID, GWLP_USERDATA,
-            GWLP_WNDPROC, GWL_EXSTYLE, GWL_STYLE, HMENU, SET_WINDOW_POS_FLAGS, WINDOWPLACEMENT,
-            WINDOW_EX_STYLE, WINDOW_STYLE,
+            CreateWindowExW, GetClassNameW, MoveWindow, SetWindowLongPtrW, SetWindowPlacement,
+            SetWindowPos, SetWindowTextW, GWLP_HINSTANCE, GWLP_ID, GWLP_USERDATA, GWLP_WNDPROC,
+            GWL_EXSTYLE, GWL_STYLE, HMENU, SET_WINDOW_POS_FLAGS, WINDOWPLACEMENT, WINDOW_EX_STYLE,
+            WINDOW_STYLE,
         },
     },
 };
@@ -34,7 +35,7 @@ pub trait WindowHandleExt {
         P0: IntoParam<HWND>,
         P1: IntoParam<HMENU>;
 
-    fn create_window<P0, P1>(
+    fn create_window<P0, P1, P2>(
         ex_style: WINDOW_EX_STYLE,
         class_name: &str,
         window_name: &str,
@@ -45,11 +46,12 @@ pub trait WindowHandleExt {
         height: i32,
         parent: P0,
         menu: P1,
-        l_param: Option<*mut ::core::ffi::c_void>,
+        l_param: Option<P2>,
     ) -> Self
     where
         P0: IntoParam<HWND>,
-        P1: IntoParam<HMENU>;
+        P1: IntoParam<HMENU>,
+        P2: IntoLParam + Debug;
 
     /// Sets a new [extended window style](https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles)
     fn set_extended_window_style(&self, ptr: isize);
@@ -90,6 +92,8 @@ pub trait WindowHandleExt {
     fn set_window_text(&self, string: &str);
 
     fn move_window(&self, x: i32, y: i32, width: i32, height: i32, repaint: bool);
+
+    fn get_class_name(&self) -> String;
 }
 
 impl WindowHandleExt for HWND {
@@ -130,7 +134,7 @@ impl WindowHandleExt for HWND {
         }
     }
 
-    fn create_window<P0, P1>(
+    fn create_window<P0, P1, P2>(
         ex_style: WINDOW_EX_STYLE,
         class_name: &str,
         window_name: &str,
@@ -141,40 +145,19 @@ impl WindowHandleExt for HWND {
         height: i32,
         parent: P0,
         menu: P1,
-        l_param: Option<*mut ::core::ffi::c_void>,
+        l_param: Option<P2>,
     ) -> Self
     where
         P0: IntoParam<HWND>,
         P1: IntoParam<HMENU>,
+        P2: IntoLParam + Debug,
     {
         unsafe {
             let h_instance = get_current_instance();
             let class_name = class_name.as_wide();
             let window_name = window_name.as_wide();
-            let menu = menu.into_param().abi();
-            let parent = parent.into_param().abi();
-
-            let create_struct = if (l_param.is_some()) {
-                let create_struct = Some(CREATESTRUCTW {
-                    lpCreateParams: l_param.unwrap(),
-                    hInstance: h_instance,
-                    hMenu: menu,
-                    hwndParent: parent,
-                    cy: height,
-                    cx: width,
-                    y,
-                    x,
-                    style: style.0 as i32,
-                    lpszName: window_name.as_pcwstr(),
-                    lpszClass: class_name.as_pcwstr(),
-                    dwExStyle: ex_style.0,
-                });
-
-                let create_struct = &create_struct as *const _ as *const ::core::ffi::c_void;
-                Some(create_struct)
-            } else {
-                None
-            };
+            // let menu = menu.into_param().abi();
+            // let parent = parent.into_param().abi();
 
             let handle = CreateWindowExW(
                 ex_style,
@@ -188,7 +171,7 @@ impl WindowHandleExt for HWND {
                 parent,
                 menu,
                 h_instance,
-                create_struct,
+                l_param.map(|l_param| l_param.into_l_param()),
             );
 
             handle
@@ -245,9 +228,28 @@ impl WindowHandleExt for HWND {
     fn move_window(&self, x: i32, y: i32, width: i32, height: i32, repaint: bool) {
         unsafe { MoveWindow(*self, x, y, width, height, repaint) };
     }
+
+    fn get_class_name(&self) -> String {
+        const BUFFER_SIZE: usize = 100;
+        let mut class_name_raw: [u16; BUFFER_SIZE] = [0; BUFFER_SIZE];
+        let count = unsafe { GetClassNameW(*self, &mut class_name_raw) as usize };
+        let class_name = &class_name_raw[..count];
+        String::from_utf16_lossy(class_name)
+    }
 }
 
 // get current instance
 pub fn get_current_instance() -> HMODULE {
     unsafe { GetModuleHandleW(None).unwrap() }
+}
+
+pub trait IntoLParam {
+    fn into_l_param(self) -> *const std::ffi::c_void;
+}
+
+impl<T> IntoLParam for T {
+    fn into_l_param(self) -> *const std::ffi::c_void {
+        let boxed_text = Box::new(self);
+        Box::into_raw(boxed_text) as *const std::ffi::c_void
+    }
 }

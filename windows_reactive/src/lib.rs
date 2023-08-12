@@ -6,15 +6,17 @@ mod message_ext;
 mod param_ext;
 mod pcwstr_handler;
 mod pre_settings;
+mod text;
 mod user_data_ext;
 mod window;
 mod window_handle;
 mod window_handle_ext;
 
 pub fn run() {
-    let window = window::window().build();
+    let window = window::window().maximized().build();
 
-    button::create_button(window);
+    button::create_button(&window);
+    text::create_text(&window);
 
     dispatch_thread_events();
 }

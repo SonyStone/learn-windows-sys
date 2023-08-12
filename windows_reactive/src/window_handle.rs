@@ -56,33 +56,13 @@ impl HwndBuilder {
         let cx: &'static Runtime = Box::leak(Box::default());
         let count = cx.create_signal(0);
 
-        // closure {vtable:0x00007ff6ee33ec00}
         let callback = Callback::new(move || {
             let current = count.get();
             count.set(current + 1);
         });
 
-        // let l_param = Some(&callback as *const _ as *const c_void);
-        // let test = Box::into_raw(Box::new("Test".to_string()));
-        // l: {__0:0x00000247b713b2e0}
-        // let l_param = Some(test as *mut c_void);
-
-        let handle = unsafe {
-            // let handle = HWND::create_window(
-            //     ex_style,
-            //     "NativeWindowsGuiWindow",
-            //     "Learn to Program Windows",
-            //     style,
-            //     x,
-            //     y,
-            //     nwidth,
-            //     nheight,
-            //     None,
-            //     None,
-            //     l_param,
-            // );
-
-            let handle = HWND::new(
+        let handle = {
+            let handle = HWND::create_window(
                 ex_style,
                 "NativeWindowsGuiWindow",
                 "Learn to Program Windows",
@@ -93,6 +73,7 @@ impl HwndBuilder {
                 nheight,
                 None,
                 None,
+                Some("Test 123 qwe"),
             );
 
             cx.create_effect(move || {
@@ -115,7 +96,7 @@ impl HwndBuilder {
 pub struct WindowHandle(HWND);
 
 impl WindowHandle {
-    pub fn isWindow(&self) -> Result<()> {
+    pub fn is_window(&self) -> Result<()> {
         let result = unsafe { IsWindow(self.0) };
         result.ok()
     }

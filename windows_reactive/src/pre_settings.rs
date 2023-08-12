@@ -14,14 +14,10 @@ use windows::{
     },
 };
 
-use crate::{
-    button,
-    user_data_ext::{self, Callback, UserDataExt},
-    window_handle_ext::WindowHandleExt,
-};
+use crate::{button, param_ext::LParamExt, window_handle_ext::WindowHandleExt};
 
 /// Create the window class for the base nwg window
-pub(crate) fn init_window_class() -> () {
+pub(crate) fn init_window_class() {
     unsafe {
         /**
             A blank system procedure used when creating new window class. Actual system event handling is done in the subclass procedure `process_events`.
@@ -35,9 +31,9 @@ pub(crate) fn init_window_class() -> () {
             let handled = match msg {
                 WM_CREATE => {
                     println!("WM_CREATE");
-                    // let my_data = l.0 as *mut String;
-                    // let my_data = Box::from_raw(my_data);
-                    // println!("Data in WM_CREATE: {}", my_data);
+                    let text = l.get_any::<&str>();
+                    println!("Data in WM_CREATE: {}", text);
+
                     // hwnd.add_raw(Callback::from_raw(l.0));
 
                     PostMessageW(hwnd, WM_USER + 101, WPARAM(0), LPARAM(0));
