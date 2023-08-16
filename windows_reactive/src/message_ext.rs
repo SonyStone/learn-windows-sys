@@ -14,6 +14,10 @@ pub trait MessageExt {
     fn translate_message(&self);
 
     fn dispatch_message(&self);
+
+    /// Dispatch system events in the current thread.
+    /// This method will pause the thread until there are events to process.
+    fn dispatch_thread_events();
 }
 
 impl MessageExt for MSG {
@@ -31,5 +35,16 @@ impl MessageExt for MSG {
 
     fn dispatch_message(&self) {
         unsafe { DispatchMessageW(self) };
+    }
+
+    fn dispatch_thread_events() {
+        let mut message: MSG = MSG::default();
+
+        while message.get_message().into() {
+            if !message.is_dialog_message() {
+                message.translate_message();
+                message.dispatch_message();
+            }
+        }
     }
 }

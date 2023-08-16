@@ -4,18 +4,18 @@ use windows::Win32::{
 };
 
 pub struct Callback {
-    closure: Box<dyn FnMut()>,
+    closure: Box<dyn FnMut(HWND)>,
 }
 
 impl Callback {
-    pub fn new(closure: impl FnMut() + 'static) -> Self {
+    pub fn new(closure: impl FnMut(HWND) + 'static) -> Self {
         Self {
             closure: Box::new(closure),
         }
     }
 
-    pub fn call(&mut self) {
-        (self.closure)();
+    pub fn call(&mut self, handle: HWND) {
+        (self.closure)(handle);
     }
 
     pub fn into_raw(self) -> *mut Self {

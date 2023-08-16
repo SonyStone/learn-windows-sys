@@ -7,14 +7,18 @@ use windows::{
         Graphics::Gdi::{GetStockObject, DKGRAY_BRUSH, HBRUSH},
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
-            DefWindowProcW, LoadCursorW, PostMessageW, RegisterClassExW, ShowWindow, CS_HREDRAW,
-            CS_VREDRAW, IDC_ARROW, SW_HIDE, WM_CLOSE, WM_COMMAND, WM_CREATE, WM_LBUTTONDOWN,
-            WM_RBUTTONDOWN, WM_USER, WNDCLASSEXW,
+            DefWindowProcW, LoadCursorW, PostMessageW, RegisterClassExW, ShowWindow, BN_CLICKED,
+            BN_DBLCLK, BN_PUSHED, CS_HREDRAW, CS_VREDRAW, EN_CHANGE, IDC_ARROW, SW_HIDE, WM_CLOSE,
+            WM_COMMAND, WM_CREATE, WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_USER, WNDCLASSEXW,
         },
     },
 };
 
-use crate::{button, param_ext::LParamExt, window_handle_ext::WindowHandleExt};
+use crate::{
+    param_ext::{LParamExt, ParamExt},
+    user_data_ext::UserDataExt,
+    window_handle_ext::WindowHandleExt,
+};
 
 /// Create the window class for the base nwg window
 pub(crate) fn init_window_class() {
@@ -55,7 +59,44 @@ pub(crate) fn init_window_class() {
                     hwnd.set_window_text("Hello world!");
                     true
                 }
-                WM_COMMAND => button::button_handler(hwnd, w, l),
+                WM_COMMAND => {
+                    let child_handle: HWND = HWND(l.0);
+                    let message = w.get_hiword();
+                    let id = w.get_loword();
+
+                    let class_name = child_handle.get_class_name();
+
+                    match &class_name as &str {
+                        "Button" => match message {
+                            BN_CLICKED => {
+                                println!("Button BN_CLICKED {}", id);
+                                child_handle.get().unwrap().call(child_handle);
+                            }
+                            BN_DBLCLK => {
+                                println!("Button BN_DBLCLK")
+                            }
+                            BN_PUSHED => {
+                                println!("Button BN_PUSHED")
+                            }
+                            _ => {
+                                println!("Button WUT?")
+                            }
+                        },
+                        "Edit" => match message {
+                            EN_CHANGE => {
+                                println!("Edit EN_CHANGE")
+                            }
+                            _ => {
+                                println!("Edit WUT?")
+                            }
+                        },
+                        _ => {
+                            println!("WUT? WUT?")
+                        }
+                    };
+
+                    true
+                }
                 _ => false,
             };
 
@@ -89,10 +130,6 @@ pub(crate) fn init_window_class() {
         let class_token = RegisterClassExW(&class);
         if class_token == 0 && GetLastError() != ERROR_CLASS_ALREADY_EXISTS {
             panic!("System class creation failed")
-        } else {
-            ()
         }
     }
-
-    ()
 }

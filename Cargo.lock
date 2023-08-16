@@ -347,6 +347,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "equivalent"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -516,7 +522,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http",
- "indexmap",
+ "indexmap 1.9.3",
  "slab",
  "tokio",
  "tokio-util",
@@ -537,6 +543,12 @@ checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 dependencies = [
  "ahash",
 ]
+
+[[package]]
+name = "hashbrown"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
 
 [[package]]
 name = "html-escape"
@@ -622,7 +634,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
 dependencies = [
  "autocfg",
- "hashbrown",
+ "hashbrown 0.12.3",
+]
+
+[[package]]
+name = "indexmap"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5477fe2230a79769d8dc68e0eabf5437907c0457a5614a9e8dddb67f65eb65d"
+dependencies = [
+ "equivalent",
+ "hashbrown 0.14.0",
 ]
 
 [[package]]
@@ -696,7 +718,7 @@ dependencies = [
  "leptos_config",
  "leptos_dom",
  "leptos_macro",
- "leptos_reactive",
+ "leptos_reactive 0.3.0",
  "leptos_server",
  "server_fn",
  "tracing",
@@ -728,10 +750,10 @@ dependencies = [
  "educe",
  "futures",
  "html-escape",
- "indexmap",
+ "indexmap 1.9.3",
  "itertools",
  "js-sys",
- "leptos_reactive",
+ "leptos_reactive 0.3.0",
  "once_cell",
  "pad-adapter",
  "paste",
@@ -752,7 +774,7 @@ checksum = "dadebc0acf011650a12c4c6c6da00f9fd4dd060432b13a598e504859d4a289ab"
 dependencies = [
  "anyhow",
  "camino",
- "indexmap",
+ "indexmap 1.9.3",
  "parking_lot",
  "proc-macro2",
  "quote",
@@ -794,7 +816,7 @@ dependencies = [
  "base64 0.21.1",
  "cfg-if",
  "futures",
- "indexmap",
+ "indexmap 1.9.3",
  "js-sys",
  "ouroboros",
  "rustc-hash",
@@ -810,13 +832,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "leptos_reactive"
+version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a5500318e457b4ab841722a5988e8db0def1ee7ac66b816ba9073c100c4984a"
+dependencies = [
+ "base64 0.21.1",
+ "cfg-if",
+ "futures",
+ "indexmap 2.0.0",
+ "rustc-hash",
+ "self_cell",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "slotmap",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "leptos_server"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be1f59485c84aef325cd51739f90eabc46e0e1543adbb92249c49181ab292ea2"
 dependencies = [
  "lazy_static",
- "leptos_reactive",
+ "leptos_reactive 0.3.0",
  "serde",
  "server_fn",
  "thiserror",
@@ -925,6 +967,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "number_into_words"
+version = "0.1.0"
+
+[[package]]
 name = "once_cell"
 version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -937,7 +983,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccd746e37177e1711c20dd619a1620f34f5c8b569c53590a72dedd5344d8924a"
 dependencies = [
  "dlv-list",
- "hashbrown",
+ "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -1274,6 +1320,12 @@ name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
+
+[[package]]
+name = "self_cell"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c309e515543e67811222dbc9e3dd7e1056279b782e1dacffe4242b718734fb6"
 
 [[package]]
 name = "serde"
@@ -1959,6 +2011,8 @@ name = "windows_reactive"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.2.1",
+ "leptos_reactive 0.4.8",
+ "number_into_words",
  "signal",
  "windows",
  "windows_stuff",

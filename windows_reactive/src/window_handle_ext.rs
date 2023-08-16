@@ -6,10 +6,10 @@ use windows::{
         Foundation::{HMODULE, HWND},
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
-            CreateWindowExW, GetClassNameW, MoveWindow, SetWindowLongPtrW, SetWindowPlacement,
-            SetWindowPos, SetWindowTextW, GWLP_HINSTANCE, GWLP_ID, GWLP_USERDATA, GWLP_WNDPROC,
-            GWL_EXSTYLE, GWL_STYLE, HMENU, SET_WINDOW_POS_FLAGS, WINDOWPLACEMENT, WINDOW_EX_STYLE,
-            WINDOW_STYLE,
+            CreateWindowExW, GetClassNameW, IsWindow, MoveWindow, SetWindowLongPtrW,
+            SetWindowPlacement, SetWindowPos, SetWindowTextW, ShowWindow, GWLP_HINSTANCE, GWLP_ID,
+            GWLP_USERDATA, GWLP_WNDPROC, GWL_EXSTYLE, GWL_STYLE, HMENU, SET_WINDOW_POS_FLAGS,
+            SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, WINDOWPLACEMENT, WINDOW_EX_STYLE, WINDOW_STYLE,
         },
     },
 };
@@ -94,6 +94,11 @@ pub trait WindowHandleExt {
     fn move_window(&self, x: i32, y: i32, width: i32, height: i32, repaint: bool);
 
     fn get_class_name(&self) -> String;
+
+    fn is_window(&self) -> Result<(), windows::core::Error>;
+    fn minimize(&self);
+    fn maximize(&self);
+    fn restore(&self);
 }
 
 impl WindowHandleExt for HWND {
@@ -235,6 +240,30 @@ impl WindowHandleExt for HWND {
         let count = unsafe { GetClassNameW(*self, &mut class_name_raw) as usize };
         let class_name = &class_name_raw[..count];
         String::from_utf16_lossy(class_name)
+    }
+
+    fn is_window(&self) -> Result<(), windows::core::Error> {
+        let result = unsafe { IsWindow(*self) };
+        result.ok()
+    }
+
+    // + ещё 15 различных состояний.
+    fn minimize(&self) {
+        unsafe {
+            ShowWindow(*self, SW_MINIMIZE);
+        }
+    }
+
+    fn maximize(&self) {
+        unsafe {
+            ShowWindow(*self, SW_MAXIMIZE);
+        }
+    }
+
+    fn restore(&self) {
+        unsafe {
+            ShowWindow(*self, SW_RESTORE);
+        }
     }
 }
 

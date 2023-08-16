@@ -1,6 +1,10 @@
+use windows::Win32::Foundation::HWND;
+
+use crate::hwnd_builder::create_window_handle;
+use crate::window_handle_ext::WindowHandleExt;
 use crate::{pre_settings, window_handle::*};
 
-#[derive(Default, PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq, Clone)]
 pub struct Window {
     pub handle: WindowHandle,
 }
@@ -36,10 +40,12 @@ impl<'a> WindowBuilder<'a> {
         pre_settings::init_window_class();
 
         let handle = create_window_handle()
-            .class_name("Custom Name")
+            .class_name("NativeWindowsGuiWindow")
             .size(self.size)
             .position(self.position)
             .build();
+
+        let handle = WindowHandle::new(handle);
 
         if self.minimized {
             handle.minimize();
