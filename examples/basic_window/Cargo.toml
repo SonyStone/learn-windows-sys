@@ -1,0 +1,9 @@
+[package]
+name = "basic_window"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+leptos_reactive = "0.4.5"
+windows_reactive = { path = "../../windows_reactive" }
+number_into_words = { path = "../../number_into_words" }

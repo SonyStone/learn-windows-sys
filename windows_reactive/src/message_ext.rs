@@ -48,3 +48,7 @@ impl MessageExt for MSG {
         }
     }
 }
+
+pub fn dispatch_thread_events() {
+    MSG::dispatch_thread_events()
+}

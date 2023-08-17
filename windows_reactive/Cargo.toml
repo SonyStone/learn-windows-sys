@@ -17,7 +17,3 @@ features = [
 ]
 [dependencies]
 bitflags = "2.2.1"
-windows_stuff = { path = "../windows_stuff" }
-signal = { path = "../signal" }
-leptos_reactive = "0.4.5"
-number_into_words = { path = "../number_into_words" }

@@ -10,7 +10,7 @@ use windows::{
 
 use super::wndproc;
 
-pub unsafe fn register_window_class() -> (PCWSTR, HMODULE) {
+pub unsafe fn register_window_class() {
     let instance = GetModuleHandleW(None).unwrap();
     let class_name = w!("Sample Window Class");
 
@@ -30,6 +30,4 @@ pub unsafe fn register_window_class() -> (PCWSTR, HMODULE) {
     //  call to fail.
     let atom = RegisterClassW(&class);
     debug_assert!(atom != 0);
-
-    (class_name, instance)
 }

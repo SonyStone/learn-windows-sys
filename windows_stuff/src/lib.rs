@@ -15,6 +15,10 @@ use windows::{
         UI::{Controls::MARGINS, WindowsAndMessaging::*},
     },
 };
+use windows_reactive::{
+    hwnd_builder::create_window_handle, message_ext::dispatch_thread_events, pre_settings,
+    window_handle_ext::WindowHandleExt,
+};
 
 pub const LEFTEXTENDWIDTH: i32 = 8;
 pub const RIGHTEXTENDWIDTH: i32 = 8;
@@ -23,44 +27,22 @@ pub const TOPEXTENDWIDTH: i32 = 27;
 
 pub fn run() {
     unsafe {
-        let mut window_flags = WindowFlags::empty();
-        window_flags.set(WindowFlags::RESIZABLE, true);
-        window_flags.set(WindowFlags::MINIMIZABLE, true);
-        window_flags.set(WindowFlags::MAXIMIZABLE, true);
+        register_window_class::register_window_class();
 
-        let (style, ex_style) = window_flags.to_window_styles();
+        let handle = create_window_handle()
+            .class_name("Sample Window Class")
+            .size((500, 500))
+            .position((300, 300))
+            .text("Learn to Program Windows")
+            .window()
+            .resizable()
+            .maximizable()
+            .minimizable()
+            .always_on_top()
+            .visible()
+            .build();
 
-        let (class_name, instance) = register_window_class::register_window_class();
-
-        let handle = CreateWindowExW(
-            ex_style,
-            class_name,
-            w!("Learn to Program Windows"),
-            style,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            None,
-            None,
-            instance,
-            None,
-        );
-
-        ShowWindow(handle, SW_SHOWNORMAL);
-
-        let mut message = MSG::default();
-
-        while GetMessageA(&mut message, None, 0, 0).into() {
-            // println!("GetMessageA");
-            match message.message {
-                WM_LBUTTONDOWN => {
-                    println!("inner WM_LBUTTONDOWN");
-                }
-                _ => {}
-            }
-            DispatchMessageA(&message);
-        }
+        dispatch_thread_events();
     }
 }
 

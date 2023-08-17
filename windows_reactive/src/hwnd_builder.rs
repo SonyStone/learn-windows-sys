@@ -27,17 +27,17 @@ pub struct HwndBuilder {
 }
 
 impl HwndBuilder {
-    pub fn parent<'a>(mut self, parent: &'a HWND) -> HwndBuilder {
+    pub fn parent(mut self, parent: &HWND) -> HwndBuilder {
         self.parent = Some(*parent);
         self
     }
 
-    pub fn class_name<'a>(mut self, name: &'a str) -> HwndBuilder {
+    pub fn class_name(mut self, name: &str) -> HwndBuilder {
         self.class_name = name.to_string();
         self
     }
 
-    pub fn text<'a>(mut self, text: &'a str) -> HwndBuilder {
+    pub fn text(mut self, text: &str) -> HwndBuilder {
         self.text = Some(text.to_string());
         self
     }
