@@ -1,15 +1,27 @@
 use windows::{
     core::IntoParam,
     Win32::{
-        Foundation::{HMODULE, HWND},
+        Foundation::{HMODULE, HWND, LPARAM, LRESULT, RECT, WPARAM},
+        Graphics::{
+            Dwm::{
+                DwmExtendFrameIntoClientArea, DwmGetWindowAttribute, DWMWA_CAPTION_BUTTON_BOUNDS,
+            },
+            Gdi::UpdateWindow,
+        },
         System::LibraryLoader::GetModuleHandleW,
-        UI::WindowsAndMessaging::{
-            CreateWindowExW, GetClassNameW, IsWindow, MoveWindow, SetWindowLongPtrW,
-            SetWindowPlacement, SetWindowPos, SetWindowTextW, ShowWindow, GWLP_HINSTANCE, GWLP_ID,
-            GWLP_USERDATA, GWLP_WNDPROC, GWL_EXSTYLE, GWL_STYLE, HMENU, SET_WINDOW_POS_FLAGS,
-            SHOW_WINDOW_CMD, SW_FORCEMINIMIZE, SW_HIDE, SW_MAXIMIZE, SW_MINIMIZE, SW_NORMAL,
-            SW_RESTORE, SW_SHOW, SW_SHOWDEFAULT, SW_SHOWMINIMIZED, SW_SHOWMINNOACTIVE, SW_SHOWNA,
-            SW_SHOWNOACTIVATE, WINDOWPLACEMENT, WINDOW_EX_STYLE, WINDOW_STYLE,
+        UI::{
+            Controls::MARGINS,
+            WindowsAndMessaging::{
+                CreateWindowExW, DefWindowProcW, GetClassNameW, GetClientRect, GetWindowLongPtrW,
+                GetWindowPlacement, GetWindowRect, IsWindow, MoveWindow, PostMessageW,
+                SetWindowLongPtrW, SetWindowPlacement, SetWindowPos, SetWindowTextW, ShowWindow,
+                GWLP_HINSTANCE, GWLP_ID, GWLP_USERDATA, GWLP_WNDPROC, GWL_EXSTYLE, GWL_STYLE,
+                GWL_USERDATA, HMENU, SET_WINDOW_POS_FLAGS, SHOW_WINDOW_CMD, SW_FORCEMINIMIZE,
+                SW_HIDE, SW_MAXIMIZE, SW_MINIMIZE, SW_NORMAL, SW_RESTORE, SW_SHOW, SW_SHOWDEFAULT,
+                SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SW_SHOWMINNOACTIVE, SW_SHOWNA,
+                SW_SHOWNOACTIVATE, SW_SHOWNORMAL, WINDOWPLACEMENT, WINDOW_EX_STYLE,
+                WINDOW_LONG_PTR_INDEX, WINDOW_STYLE,
+            },
         },
     },
 };
@@ -19,7 +31,7 @@ use crate::{
     window_handle_getter::WindowHandleGetter,
 };
 
-/// [SetWindowLongPtrW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowlongptrw)
+impl WindowHandleExt for HWND {}
 pub trait WindowHandleExt: WindowHandleGetter {
     /// [CreateWindowExW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createwindowexw)
     fn new<P0, P1>(
@@ -75,7 +87,7 @@ pub trait WindowHandleExt: WindowHandleGetter {
     where
         P0: IntoParam<HWND>,
         P1: IntoParam<HMENU>,
-        P2: IntoLParam + std::fmt::Debug,
+        P2: IntoLParam,
     {
         unsafe {
             let h_instance = get_current_instance();
@@ -103,43 +115,14 @@ pub trait WindowHandleExt: WindowHandleGetter {
         }
     }
 
-    /// Sets a new [extended window style](https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles)
-    fn set_extended_window_style(&self, ptr: isize) {
-        unsafe { SetWindowLongPtrW(*self.get_handle(), GWL_EXSTYLE, ptr) };
-    }
-
-    /// Sets a new application instance handle.
-    fn set_instance(&self, ptr: isize) {
-        unsafe { SetWindowLongPtrW(*self.get_handle(), GWLP_HINSTANCE, ptr) };
-    }
-
-    /// Sets a new identifier of the child window.
-    /// The window cannot be a top-level window.
-    fn set_identifier(&self, ptr: isize) {
-        unsafe { SetWindowLongPtrW(*self.get_handle(), GWLP_ID, ptr) };
-    }
-
-    /// Sets a new [window style](https://learn.microsoft.com/en-us/windows/desktop/winmsg/window-styles).
-    fn set_style(&self, ptr: isize) {
-        unsafe { SetWindowLongPtrW(*self.get_handle(), GWL_STYLE, ptr) };
-    }
-
-    /// Sets the user data associated with the window.
-    /// This data is intended for use by the application that created the window.
-    /// Its value is initially zero.
-    fn set_user_data(&self, ptr: isize) {
-        unsafe { SetWindowLongPtrW(*self.get_handle(), GWLP_USERDATA, ptr) };
-    }
-
-    /// Sets a new address for the window procedure.
-    fn set_window_procedure(&self, ptr: isize) {
-        unsafe { SetWindowLongPtrW(*self.get_handle(), GWLP_WNDPROC, ptr) };
-    }
-
     unsafe fn set_window_placement(&self, lpwndpl: *const WINDOWPLACEMENT) {
         unsafe {
             SetWindowPlacement(*self.get_handle(), lpwndpl);
         };
+    }
+
+    fn from_l_param(l: LPARAM) -> HWND {
+        HWND(l.0)
     }
 
     /// [SetWindowPos](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos)
@@ -178,27 +161,140 @@ pub trait WindowHandleExt: WindowHandleGetter {
         let result = unsafe { IsWindow(*self.get_handle()) };
         result.ok()
     }
-}
 
-impl WindowHandleExt for HWND {}
-
-// get current instance
-pub fn get_current_instance() -> HMODULE {
-    unsafe { GetModuleHandleW(None).unwrap() }
-}
-
-pub trait IntoLParam {
-    fn into_l_param(self) -> *const std::ffi::c_void;
-}
-
-impl<T> IntoLParam for T {
-    fn into_l_param(self) -> *const std::ffi::c_void {
-        let boxed_text = Box::new(self);
-        Box::into_raw(boxed_text) as *const std::ffi::c_void
+    /// [GetWindowPlacement](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowplacement)
+    fn get_window_placement(&self) -> WINDOWPLACEMENT {
+        let mut lpwndpl = WINDOWPLACEMENT::default();
+        unsafe { GetWindowPlacement(*self.get_handle(), &mut lpwndpl).unwrap() };
+        lpwndpl
     }
-}
 
-pub trait ShowWindowExt: WindowHandleGetter {
+    fn is_maximized(&self) -> bool {
+        self.get_window_placement().showCmd == SW_SHOWMAXIMIZED
+    }
+
+    fn is_minimized(&self) -> bool {
+        self.get_window_placement().showCmd == SW_SHOWMINIMIZED
+    }
+
+    fn is_normal(&self) -> bool {
+        self.get_window_placement().showCmd == SW_SHOWNORMAL
+    }
+
+    fn get_window_rect(&self) -> RECT {
+        let mut rect = RECT::default();
+        unsafe { GetWindowRect(*self.get_handle(), &mut rect).unwrap() };
+        rect
+    }
+
+    fn get_client_rect(&self) -> RECT {
+        let mut rect = RECT::default();
+        unsafe { GetClientRect(*self.get_handle(), &mut rect).unwrap() };
+        rect
+    }
+
+    /// [DwmGetWindowAttribute](https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmgetwindowattribute)
+    fn get_caption_button_bounds(&self) -> RECT {
+        let mut rect_caption_button_bounds = RECT::default();
+        unsafe {
+            DwmGetWindowAttribute(
+                *self.get_handle(),
+                DWMWA_CAPTION_BUTTON_BOUNDS,
+                &mut rect_caption_button_bounds as *mut _ as *mut std::os::raw::c_void,
+                std::mem::size_of::<RECT>() as u32,
+            )
+            .unwrap()
+        };
+
+        rect_caption_button_bounds
+    }
+
+    /// [DwmExtendFrameIntoClientArea](https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmextendframeintoclientarea)
+    fn extend_frame_into_client_area(&self, margins: MARGINS) {
+        unsafe { DwmExtendFrameIntoClientArea(*self.get_handle(), &margins).unwrap() };
+    }
+
+    /// [DefWindowProcW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-defwindowprocw)
+    fn default_window_proc<P1, P2>(&self, msg: u32, w: P1, l: P2) -> LRESULT
+    where
+        P1: IntoParam<WPARAM>,
+        P2: IntoParam<LPARAM>,
+    {
+        unsafe { DefWindowProcW(*self.get_handle(), msg, w, l) }
+    }
+
+    fn post_message<P1, P2>(&self, msg: u32, wparam: P1, lparam: P2)
+    where
+        P1: IntoParam<WPARAM>,
+        P2: IntoParam<LPARAM>,
+    {
+        unsafe { PostMessageW(*self.get_handle(), msg, wparam, lparam) };
+    }
+
+    fn update_window(&self) {
+        unsafe { UpdateWindow(*self.get_handle()) };
+    }
+
+    /// set raw pointer.
+    /// Mostly used for GWL_USERDATA
+    /// [SetWindowLongPtrW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowlongptrw)
+    fn set_window_pointer<T>(&self, index: WINDOW_LONG_PTR_INDEX, ptr: *mut T) {
+        unsafe { SetWindowLongPtrW(*self.get_handle(), index, ptr as _) };
+    }
+
+    /// -20 GWL_EXSTYLE
+    /// Sets a new [extended window style](https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles)
+    fn set_extended_window_style<T>(&self, ptr: *mut T) {
+        self.set_window_pointer(GWL_EXSTYLE, ptr);
+    }
+
+    /// -6 GWLP_HINSTANCE
+    /// Sets a new application instance handle.
+    fn set_instance<T>(&self, ptr: *mut T) {
+        self.set_window_pointer(GWLP_HINSTANCE, ptr);
+    }
+
+    /// -12 GWLP_ID
+    /// Sets a new identifier of the child window.
+    /// The window cannot be a top-level window.
+    fn set_identifier<T>(&self, ptr: *mut T) {
+        self.set_window_pointer(GWLP_ID, ptr);
+    }
+
+    /// -16 GWL_STYLE
+    /// Sets a new [window style](https://learn.microsoft.com/en-us/windows/desktop/winmsg/window-styles).
+    fn set_style<T>(&self, ptr: *mut T) {
+        self.set_window_pointer(GWL_STYLE, ptr);
+    }
+
+    /// -21 GWLP_USERDATA
+    /// Sets the user data associated with the window.
+    /// This data is intended for use by the application that created the window.
+    /// Its value is initially zero.
+    fn set_user_data<T>(&self, ptr: *mut T) {
+        self.set_window_pointer(GWLP_USERDATA, ptr);
+    }
+
+    /// -4 GWLP_WNDPROC
+    /// Sets a new address for the window procedure.
+    fn set_window_procedure<T>(&self, ptr: *mut T) {
+        self.set_window_pointer(GWLP_WNDPROC, ptr);
+    }
+
+    /// returns raw pointer
+    fn get_window_long_ptr<T>(&self, index: WINDOW_LONG_PTR_INDEX) -> Option<&'static mut T> {
+        let ptr = unsafe { GetWindowLongPtrW(*self.get_handle(), index) as *mut T };
+        if ptr.is_null() {
+            None
+        } else {
+            unsafe { Some(&mut *ptr) }
+        }
+    }
+
+    fn get_user_data<T>(&self) -> Option<&'static mut T> {
+        self.get_window_long_ptr(GWL_USERDATA)
+    }
+
     /// [ShowWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow)
     fn show_window(&self, command: SHOW_WINDOW_CMD) {
         unsafe {
@@ -290,4 +386,18 @@ pub trait ShowWindowExt: WindowHandleGetter {
     }
 }
 
-impl ShowWindowExt for HWND {}
+// get current instance
+pub fn get_current_instance() -> HMODULE {
+    unsafe { GetModuleHandleW(None).unwrap() }
+}
+
+pub trait IntoLParam {
+    fn into_l_param(self) -> *const std::ffi::c_void;
+}
+
+impl<T> IntoLParam for T {
+    fn into_l_param(self) -> *const std::ffi::c_void {
+        let boxed_text = Box::new(self);
+        Box::into_raw(boxed_text) as *const std::ffi::c_void
+    }
+}

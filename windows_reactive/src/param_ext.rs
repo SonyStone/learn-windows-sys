@@ -1,68 +1,78 @@
-use std::fmt::Debug;
+use std::mem::transmute;
 
 use windows::Win32::{
-    Foundation::{LPARAM, WPARAM},
+    Foundation::{HWND, LPARAM, POINT, WPARAM},
     UI::WindowsAndMessaging::CREATESTRUCTW,
 };
 
 pub trait ParamExt {
-    fn get_loword(self) -> u32;
-    fn get_hiword(self) -> u32;
-    fn get_x(self) -> i32;
-    fn get_y(self) -> i32;
+    fn get_loword(&self) -> u32;
+    fn get_hiword(&self) -> u32;
+    fn get_x(&self) -> i32;
+    fn get_y(&self) -> i32;
+
+    fn get_point(&self) -> POINT {
+        POINT {
+            x: self.get_x(),
+            y: self.get_y(),
+        }
+    }
 }
 
 impl ParamExt for WPARAM {
-    fn get_loword(self: WPARAM) -> u32 {
+    fn get_loword(&self) -> u32 {
         (self.0 & 0xffff) as u32
     }
 
-    fn get_hiword(self: WPARAM) -> u32 {
+    fn get_hiword(&self) -> u32 {
         ((self.0 >> 16) & 0xffff) as u32
     }
 
-    fn get_x(self: WPARAM) -> i32 {
+    fn get_x(&self) -> i32 {
         (self.0 & 0xffff) as i32
     }
 
-    fn get_y(self: WPARAM) -> i32 {
+    fn get_y(&self) -> i32 {
         (self.0 >> 16) as i32
     }
 }
 
 impl ParamExt for LPARAM {
-    fn get_loword(self: LPARAM) -> u32 {
+    fn get_loword(&self) -> u32 {
         (self.0 & 0xffff) as u32
     }
 
-    fn get_hiword(self: LPARAM) -> u32 {
+    fn get_hiword(&self) -> u32 {
         ((self.0 >> 16) & 0xffff) as u32
     }
 
-    fn get_x(self: LPARAM) -> i32 {
+    fn get_x(&self) -> i32 {
         (self.0 & 0xffff) as i32
     }
 
-    fn get_y(self: LPARAM) -> i32 {
+    fn get_y(&self) -> i32 {
         (self.0 >> 16) as i32
     }
 }
 
 pub trait LParamExt {
-    fn get_any<T>(&self) -> T
-    where
-        T: Debug;
+    fn get_create_struct(&self) -> &CREATESTRUCTW;
+    fn get_create_data<T>(&self) -> Box<T>;
+    fn get_child_handle(&self) -> HWND;
 }
 
 impl LParamExt for LPARAM {
-    fn get_any<T>(self: &LPARAM) -> T
-    where
-        T: Debug,
-    {
-        let create_struct = self.0 as *mut CREATESTRUCTW;
-        let create_struct = unsafe { *create_struct };
+    fn get_create_struct(&self) -> &CREATESTRUCTW {
+        unsafe { transmute(*self) }
+    }
+
+    fn get_create_data<T>(&self) -> Box<T> {
+        let create_struct = self.get_create_struct();
         let l_param = create_struct.lpCreateParams as *mut T;
-        let l_param = unsafe { Box::from_raw(l_param) };
-        *l_param
+        unsafe { Box::from_raw(l_param) }
+    }
+
+    fn get_child_handle(&self) -> HWND {
+        HWND(self.0)
     }
 }

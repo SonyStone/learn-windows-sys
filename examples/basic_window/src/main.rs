@@ -1,11 +1,8 @@
 use leptos_reactive::{SignalGet, SignalUpdate};
 use number_into_words::encode;
 use windows_reactive::{
-    hwnd_builder::create_window_handle,
-    message_ext::dispatch_thread_events,
-    pre_settings,
-    window_handle::WindowHandle,
-    window_handle_ext::{ShowWindowExt, WindowHandleExt},
+    hwnd_builder::create_window_handle, message_ext::dispatch_thread_events, pre_settings,
+    window_handle_ext::WindowHandleExt,
 };
 
 pub fn main() {
@@ -36,6 +33,8 @@ pub fn main() {
             .minimizable()
             .always_on_top()
             .visible()
+            .on_click(|hwnd| hwnd.set_window_text("Basic Window"))
+            .on_right_click(|hwnd| hwnd.set_window_text("Hello world!"))
             .build();
 
         let handle = window;
@@ -50,8 +49,14 @@ pub fn main() {
             .flat()
             .child()
             .visible()
-            .on_click(move |_| {
-                handle.maximize();
+            .on_click(move |button| {
+                if handle.is_maximized() {
+                    handle.restore();
+                    button.set_window_text("maximize");
+                } else {
+                    handle.maximize();
+                    button.set_window_text("resotre");
+                }
             })
             .build();
 

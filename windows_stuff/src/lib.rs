@@ -1,22 +1,17 @@
 mod caption_title;
 mod hit_test_nca;
 pub mod register_window_class;
-pub mod window_state;
 
-use window_state::WindowFlags;
-use windows::{
-    core::*,
-    Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
-        Graphics::{
-            Dwm::{DwmDefWindowProc, DwmExtendFrameIntoClientArea, DwmIsCompositionEnabled},
-            Gdi::{BeginPaint, EndPaint, PAINTSTRUCT},
-        },
-        UI::{Controls::MARGINS, WindowsAndMessaging::*},
+use windows::Win32::{
+    Foundation::{HWND, LPARAM, LRESULT, WPARAM},
+    Graphics::{
+        Dwm::{DwmDefWindowProc, DwmIsCompositionEnabled},
+        Gdi::{BeginPaint, EndPaint, PAINTSTRUCT},
     },
+    UI::{Controls::MARGINS, WindowsAndMessaging::*},
 };
 use windows_reactive::{
-    hwnd_builder::create_window_handle, message_ext::dispatch_thread_events, pre_settings,
+    hwnd_builder::create_window_handle, message_ext::dispatch_thread_events, rect_ext::RectExt,
     window_handle_ext::WindowHandleExt,
 };
 
@@ -29,7 +24,7 @@ pub fn run() {
     unsafe {
         register_window_class::register_window_class();
 
-        let handle = create_window_handle()
+        let window = create_window_handle()
             .class_name("Sample Window Class")
             .size((500, 500))
             .position((300, 300))
@@ -40,6 +35,27 @@ pub fn run() {
             .minimizable()
             .always_on_top()
             .visible()
+            .build();
+
+        create_window_handle()
+            .class_name("BUTTON")
+            .text("maximize")
+            .position((0, 10))
+            .size((80, 20))
+            .parent(&window)
+            .push_button()
+            .flat()
+            .child()
+            .visible()
+            .on_click(move |button| {
+                if window.is_maximized() {
+                    window.restore();
+                    button.set_window_text("maximize");
+                } else {
+                    window.maximize();
+                    button.set_window_text("resotre");
+                }
+            })
             .build();
 
         dispatch_thread_events();
@@ -95,7 +111,7 @@ fn app_win_proc(window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> L
                 PostQuitMessage(0);
                 LRESULT(0)
             }
-            _ => DefWindowProcA(window, message, wparam, lparam),
+            _ => window.default_window_proc(message, wparam, lparam),
         }
     }
 }
@@ -111,8 +127,7 @@ unsafe fn custom_caption_proc(
 
     // Handle window creation.
     if message == WM_CREATE {
-        let mut rc_client = RECT::default();
-        GetWindowRect(window, &mut rc_client).unwrap();
+        let rc_client = window.get_window_rect();
 
         // Inform application of the frame change.
         SetWindowPos(
@@ -120,8 +135,8 @@ unsafe fn custom_caption_proc(
             None,
             rc_client.left,
             rc_client.top,
-            caption_title::rect_width(rc_client),
-            caption_title::rect_height(rc_client),
+            rc_client.width(),
+            rc_client.height(),
             SWP_FRAMECHANGED,
         )
         .unwrap();
@@ -132,14 +147,12 @@ unsafe fn custom_caption_proc(
 
     // Handle window activation.
     if message == WM_ACTIVATE {
-        let margins = MARGINS {
+        window.extend_frame_into_client_area(MARGINS {
             cxLeftWidth: LEFTEXTENDWIDTH,
             cxRightWidth: RIGHTEXTENDWIDTH,
             cyBottomHeight: BOTTOMEXTENDWIDTH,
             cyTopHeight: TOPEXTENDWIDTH,
-        };
-
-        DwmExtendFrameIntoClientArea(window, &margins).unwrap();
+        });
 
         f_call_dwp = true;
         l_ret = LRESULT(0);

@@ -2,42 +2,26 @@ use windows::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
     UI::WindowsAndMessaging::*,
 };
+use windows_reactive::{
+    param_ext::ParamExt, rect_ext::RectExt, window_handle_ext::WindowHandleExt,
+};
 
 use super::{BOTTOMEXTENDWIDTH, LEFTEXTENDWIDTH, RIGHTEXTENDWIDTH, TOPEXTENDWIDTH};
 
 pub unsafe fn hit_test_nca(window: HWND, _: WPARAM, lparam: LPARAM) -> LRESULT {
     // Get the point coordinates for the hit test.
-    let pt_mouse = POINT {
-        x: get_x_lparam(lparam),
-        y: get_y_lparam(lparam),
-    };
+    let pt_mouse = lparam.get_point();
 
     // Get the window rectangle.
-    let mut rc_window = RECT::default();
-    GetWindowRect(window, &mut rc_window).unwrap();
+    let rc_window = window.get_window_rect();
 
     // Get the frame rectangle, adjusted for the style without a caption.
-    let mut rc_frame = RECT::default();
-    AdjustWindowRectEx(
-        &mut rc_frame,
-        WS_OVERLAPPEDWINDOW & !WS_CAPTION,
-        false,
-        WINDOW_EX_STYLE::default(),
-    )
-    .unwrap();
+    let rc_frame = RECT::adjust_window_rect();
 
     let hit = HitTest::default();
     let hit = hit.determine_poitnt(pt_mouse, rc_window, rc_frame);
 
     LRESULT(hit.hit_test() as isize)
-}
-
-fn get_x_lparam(lparam: LPARAM) -> i32 {
-    (lparam.0 & 0xffff) as i32
-}
-
-fn get_y_lparam(lparam: LPARAM) -> i32 {
-    (lparam.0 >> 16) as i32
 }
 
 /// Determine if the hit test is for resizing. Default middle (1,1).

@@ -1,24 +1,19 @@
 use std::mem::size_of;
 
-use windows::{
-    w,
-    Win32::{
-        Foundation::{GetLastError, ERROR_CLASS_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WPARAM},
-        Graphics::Gdi::{GetStockObject, DKGRAY_BRUSH, HBRUSH},
-        System::LibraryLoader::GetModuleHandleW,
-        UI::WindowsAndMessaging::{
-            DefWindowProcW, LoadCursorW, PostMessageW, PostQuitMessage, RegisterClassExW,
-            ShowWindow, BN_CLICKED, BN_DBLCLK, BN_PUSHED, CS_HREDRAW, CS_VREDRAW, EN_CHANGE,
-            IDC_ARROW, SW_HIDE, WM_CLOSE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_LBUTTONDOWN,
-            WM_RBUTTONDOWN, WM_USER, WNDCLASSEXW,
-        },
+use windows::Win32::{
+    Foundation::{GetLastError, ERROR_CLASS_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WPARAM},
+    Graphics::Gdi::{GetStockObject, DKGRAY_BRUSH, HBRUSH},
+    System::LibraryLoader::GetModuleHandleW,
+    UI::WindowsAndMessaging::{
+        LoadCursorW, RegisterClassExW, CS_DBLCLKS, CS_HREDRAW, CS_VREDRAW, IDC_ARROW, WM_NCCREATE,
+        WNDCLASSEXW, WNDCLASS_STYLES,
     },
 };
 
 use crate::{
-    param_ext::{LParamExt, ParamExt},
+    hwnd_builder::Callback,
+    param_ext::LParamExt,
     pcwstr_handler::{AsPCWSTR, AsWide},
-    user_data_ext::UserDataExt,
     window_handle_ext::WindowHandleExt,
 };
 
@@ -33,7 +28,8 @@ pub fn init_window_class(class_name: &str) {
         let class_name = class_name.as_wide();
 
         let background = HBRUSH(GetStockObject(DKGRAY_BRUSH).0);
-        let style = CS_HREDRAW | CS_VREDRAW;
+        // let style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
+        let style = WNDCLASS_STYLES::default();
 
         let class = WNDCLASSEXW {
             cbSize: size_of::<WNDCLASSEXW>() as u32,
@@ -42,7 +38,7 @@ pub fn init_window_class(class_name: &str) {
             lpszClassName: class_name.as_pcwstr(),
             hbrBackground: background,
             style,
-            lpfnWndProc: Some(blank_window_proc),
+            lpfnWndProc: Some(window_proc),
             ..Default::default()
         };
 
@@ -56,84 +52,15 @@ pub fn init_window_class(class_name: &str) {
 /**
     A blank system procedure used when creating new window class. Actual system event handling is done in the subclass procedure `process_events`.
 */
-unsafe extern "system" fn blank_window_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESULT {
-    let handled = match msg {
-        WM_CREATE => {
-            println!("WM_CREATE");
-            let text = l.get_any::<&str>();
-            println!("Data in WM_CREATE: {}", text);
-
-            // hwnd.add_raw(Callback::from_raw(l.0));
-
-            PostMessageW(hwnd, WM_USER + 101, WPARAM(0), LPARAM(0));
-            true
+unsafe extern "system" fn window_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESULT {
+    match msg {
+        WM_NCCREATE => {
+            hwnd.set_user_data(l.get_create_struct().lpCreateParams);
+            hwnd.default_window_proc(msg, w, l)
         }
-        WM_CLOSE => {
-            println!("WM_CLOSE");
-            // ShowWindow(hwnd, SW_HIDE);
-            false
-        }
-        WM_DESTROY => {
-            println!("WM_DESTROY");
-            PostQuitMessage(0);
-            false
-        }
-        WM_LBUTTONDOWN => {
-            println!("WM_LBUTTONDOWN");
-            // let callback = hwnd.get().unwrap();
-            // callback.call();
-            true
-        }
-        WM_RBUTTONDOWN => {
-            println!("WM_RBUTTONDOWN");
-            hwnd.set_window_text("Hello world!");
-            true
-        }
-        WM_COMMAND => {
-            let child_handle: HWND = HWND(l.0);
-            let message = w.get_hiword();
-            let id = w.get_loword();
-
-            let class_name = child_handle.get_class_name();
-            println!("WM_COMMAND class_name: {}", class_name);
-
-            match &class_name as &str {
-                "Button" => match message {
-                    BN_CLICKED => {
-                        println!("Button BN_CLICKED {}", id);
-                        child_handle.get().unwrap().call(child_handle);
-                    }
-                    BN_DBLCLK => {
-                        println!("Button BN_DBLCLK")
-                    }
-                    BN_PUSHED => {
-                        println!("Button BN_PUSHED")
-                    }
-                    _ => {
-                        println!("Button WUT?")
-                    }
-                },
-                "Edit" => match message {
-                    EN_CHANGE => {
-                        println!("Edit EN_CHANGE")
-                    }
-                    _ => {
-                        println!("Edit WUT?")
-                    }
-                },
-                _ => {
-                    println!("WUT? WUT?")
-                }
-            };
-
-            true
-        }
-        _ => false,
-    };
-
-    if handled {
-        LRESULT(0)
-    } else {
-        DefWindowProcW(hwnd, msg, w, l)
+        _ => hwnd.get_user_data::<Callback>().map_or_else(
+            || hwnd.default_window_proc(msg, w, l),
+            |callback| callback.0(hwnd, msg, w, l),
+        ),
     }
 }

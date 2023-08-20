@@ -1,7 +1,6 @@
 use windows::{
     core::*,
     Win32::{
-        Foundation::HMODULE,
         Graphics::Gdi::{GetStockObject, DKGRAY_BRUSH, HBRUSH},
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::*,
