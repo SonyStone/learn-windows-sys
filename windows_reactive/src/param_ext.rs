@@ -59,6 +59,7 @@ pub trait LParamExt {
     fn get_create_struct(&self) -> &CREATESTRUCTW;
     fn get_create_data<T>(&self) -> Box<T>;
     fn get_child_handle(&self) -> HWND;
+    fn get_mouse_position(&self) -> (i32, i32);
 }
 
 impl LParamExt for LPARAM {
@@ -75,4 +76,16 @@ impl LParamExt for LPARAM {
     fn get_child_handle(&self) -> HWND {
         HWND(self.0)
     }
+
+    fn get_mouse_position(&self) -> (i32, i32) {
+        (self.get_x(), self.get_y())
+    }
 }
+
+pub trait WParamExt: ParamExt {
+    fn get_pointer_id(&self) -> u32 {
+        self.get_loword()
+    }
+}
+
+impl WParamExt for WPARAM {}

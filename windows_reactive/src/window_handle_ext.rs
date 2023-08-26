@@ -1,12 +1,12 @@
 use windows::{
     core::IntoParam,
     Win32::{
-        Foundation::{HMODULE, HWND, LPARAM, LRESULT, RECT, WPARAM},
+        Foundation::{BOOL, HMODULE, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
         Graphics::{
             Dwm::{
                 DwmExtendFrameIntoClientArea, DwmGetWindowAttribute, DWMWA_CAPTION_BUTTON_BOUNDS,
             },
-            Gdi::UpdateWindow,
+            Gdi::{BeginPaint, EndPaint, ScreenToClient, UpdateWindow, HDC, PAINTSTRUCT},
         },
         System::LibraryLoader::GetModuleHandleW,
         UI::{
@@ -215,12 +215,20 @@ pub trait WindowHandleExt: WindowHandleGetter {
     }
 
     /// [DefWindowProcW](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-defwindowprocw)
-    fn default_window_proc<P1, P2>(&self, msg: u32, w: P1, l: P2) -> LRESULT
+    ///
+    /// Calls the default window procedure to provide default processing
+    /// for any window messages that an application does not process.
+    /// This function ensures that every message is processed.
+    fn default_window_procedure<P1, P2>(&self, msg: u32, w: P1, l: P2) -> LRESULT
     where
         P1: IntoParam<WPARAM>,
         P2: IntoParam<LPARAM>,
     {
         unsafe { DefWindowProcW(*self.get_handle(), msg, w, l) }
+    }
+
+    fn handled(&self) -> LRESULT {
+        LRESULT::default()
     }
 
     fn post_message<P1, P2>(&self, msg: u32, wparam: P1, lparam: P2)
@@ -383,6 +391,20 @@ pub trait WindowHandleExt: WindowHandleGetter {
     /// This flag should only be used when minimizing windows from a different thread.
     fn force_minimize(&self) {
         self.show_window(SW_FORCEMINIMIZE);
+    }
+
+    fn screen_to_client(&self, point: &POINT) -> POINT {
+        let mut point = *point;
+        unsafe { ScreenToClient(*self.get_handle(), &mut point) };
+        point
+    }
+
+    fn begin_paint(&self, paint_struct: &mut PAINTSTRUCT) -> HDC {
+        unsafe { BeginPaint(*self.get_handle(), paint_struct) }
+    }
+
+    fn end_paint(&self, paint_struct: &mut PAINTSTRUCT) -> BOOL {
+        unsafe { EndPaint(*self.get_handle(), paint_struct) }
     }
 }
 

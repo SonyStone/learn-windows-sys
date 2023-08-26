@@ -56,10 +56,10 @@ unsafe extern "system" fn window_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM
     match msg {
         WM_NCCREATE => {
             hwnd.set_user_data(l.get_create_struct().lpCreateParams);
-            hwnd.default_window_proc(msg, w, l)
+            hwnd.default_window_procedure(msg, w, l)
         }
         _ => hwnd.get_user_data::<Callback>().map_or_else(
-            || hwnd.default_window_proc(msg, w, l),
+            || hwnd.default_window_procedure(msg, w, l),
             |callback| callback.0(hwnd, msg, w, l),
         ),
     }

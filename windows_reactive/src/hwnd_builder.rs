@@ -1,32 +1,53 @@
 use std::fmt::Display;
 
 use windows::Win32::{
-    Foundation::{HWND, LPARAM, LRESULT, WPARAM},
-    UI::WindowsAndMessaging::{
-        PostQuitMessage, BN_CLICKED, BN_DBLCLK, BN_PUSHED, BS_FLAT, BS_PUSHBUTTON, CS_DBLCLKS,
-        CW_USEDEFAULT, EN_CHANGE, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_COMMAND, WM_CREATE,
-        WM_DESTROY, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_RBUTTONDOWN, WS_BORDER, WS_CAPTION,
-        WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_ACCEPTFILES, WS_EX_APPWINDOW,
-        WS_EX_LAYERED, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
-        WS_EX_WINDOWEDGE, WS_MAXIMIZE, WS_MAXIMIZEBOX, WS_MINIMIZE, WS_MINIMIZEBOX,
-        WS_OVERLAPPEDWINDOW, WS_POPUP, WS_SIZEBOX, WS_SYSMENU, WS_VISIBLE,
+    Foundation::{
+        GetLastError, SetLastError, COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WIN32_ERROR,
+        WPARAM,
+    },
+    Graphics::Gdi::{
+        BeginPaint, Ellipse, EndPaint, GetDC, LineTo, MoveToEx, ReleaseDC, ScreenToClient,
+        SetPixel, HDC, PAINTSTRUCT,
+    },
+    UI::{
+        Input::Pointer::{
+            EnableMouseInPointer, GetPointerFramePenInfo, GetPointerFrameTouchInfo, GetPointerInfo,
+            GetPointerPenInfo, GetPointerTouchInfo, GetPointerType, POINTER_INFO, POINTER_PEN_INFO,
+            POINTER_TOUCH_INFO,
+        },
+        WindowsAndMessaging::{
+            PostQuitMessage, BN_CLICKED, BN_DBLCLK, BN_PUSHED, BS_FLAT, BS_PUSHBUTTON, CS_DBLCLKS,
+            CW_USEDEFAULT, EN_CHANGE, POINTER_INPUT_TYPE, PT_MOUSE, PT_PEN, PT_POINTER, PT_TOUCH,
+            PT_TOUCHPAD, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLOSE, WM_COMMAND, WM_CREATE,
+            WM_DESTROY, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_PAINT, WM_POINTERDOWN, WM_POINTERUP,
+            WM_POINTERUPDATE, WM_RBUTTONDOWN, WS_BORDER, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN,
+            WS_CLIPSIBLINGS, WS_EX_ACCEPTFILES, WS_EX_APPWINDOW, WS_EX_LAYERED,
+            WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_EX_WINDOWEDGE,
+            WS_MAXIMIZE, WS_MAXIMIZEBOX, WS_MINIMIZE, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW,
+            WS_POPUP, WS_SIZEBOX, WS_SYSMENU, WS_VISIBLE,
+        },
     },
 };
 
 use crate::{
-    param_ext::{LParamExt, ParamExt},
+    device_context_ext::DeviceContextExt,
+    errors::last_error,
+    param_ext::{LParamExt, ParamExt, WParamExt},
+    rect_ext::RectExt,
     window_handle_ext::WindowHandleExt,
 };
 
-pub struct Callback(pub Box<dyn Fn(HWND, u32, WPARAM, LPARAM) -> LRESULT>);
+pub struct Callback(pub Box<dyn FnMut(HWND, u32, WPARAM, LPARAM) -> LRESULT>);
 
 impl Callback {
-    pub fn new(closure: impl Fn(HWND, u32, WPARAM, LPARAM) -> LRESULT + 'static) -> Self {
+    pub fn new(closure: impl FnMut(HWND, u32, WPARAM, LPARAM) -> LRESULT + 'static) -> Self {
         Self(Box::new(closure))
     }
 }
 
 pub struct OnCLick(pub Box<dyn Fn(HWND)>);
+
+pub struct OnMessage(pub Box<dyn FnMut(HWND, u32, WPARAM, LPARAM) -> LRESULT>);
 
 #[derive(Default)]
 pub struct HwndBuilder {
@@ -34,6 +55,7 @@ pub struct HwndBuilder {
     text: Option<String>,
     size: Option<(i32, i32)>,
     pos: Option<(i32, i32)>,
+    on_message_callback: Option<OnMessage>,
     click_callback: Option<OnCLick>,
     right_click_callback: Option<OnCLick>,
     parent: Option<HWND>,
@@ -74,6 +96,14 @@ impl HwndBuilder {
 
     pub fn on_right_click(mut self, f: impl Fn(HWND) + 'static) -> Self {
         self.right_click_callback = Some(OnCLick(Box::new(f)));
+        self
+    }
+
+    pub fn on_message(
+        mut self,
+        f: impl FnMut(HWND, u32, WPARAM, LPARAM) -> LRESULT + 'static,
+    ) -> Self {
+        self.on_message_callback = Some(OnMessage(Box::new(f)));
         self
     }
 
@@ -175,101 +205,14 @@ impl HwndBuilder {
         let window_name = &self.text.clone().unwrap_or("".to_string());
         let parent = self.parent.unwrap_or(HWND::default());
 
-        let mut messages_handler = None;
         let mut click_callback = None;
+
+        unsafe {
+            EnableMouseInPointer(true);
+        }
 
         if self.parent.is_some() && self.click_callback.is_some() {
             click_callback = Some(Box::into_raw(Box::new(self.click_callback.unwrap())));
-        } else {
-            messages_handler = Some(Callback::new(
-                move |hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM| -> LRESULT {
-                    let handled = match msg {
-                        WM_CREATE => {
-                            println!("WM_CREATE");
-                            true
-                        }
-                        WM_CLOSE => {
-                            println!("WM_CLOSE");
-                            hwnd.hide();
-                            false
-                        }
-                        WM_DESTROY => {
-                            println!("WM_DESTROY");
-                            unsafe {
-                                PostQuitMessage(0);
-                            }
-                            false
-                        }
-                        WM_LBUTTONDOWN => {
-                            println!("WM_LBUTTONDOWN");
-                            if let Some(click) = &self.click_callback {
-                                click.0(hwnd);
-                            }
-                            true
-                        }
-                        WM_RBUTTONDOWN => {
-                            println!("WM_RBUTTONDOWN");
-                            if let Some(click) = &self.right_click_callback {
-                                click.0(hwnd);
-                            }
-                            true
-                        }
-                        WM_LBUTTONDBLCLK => {
-                            println!("WM_LBUTTONDBLCLK");
-                            true
-                        }
-                        WM_COMMAND => {
-                            let child_handle = l.get_child_handle();
-                            let message = w.get_hiword();
-
-                            let class_name = child_handle.get_class_name();
-
-                            match &class_name as &str {
-                                "Button" => match message {
-                                    BN_CLICKED => {
-                                        if let Some(click) =
-                                            child_handle.get_user_data::<Callback>()
-                                        {
-                                            click.0(child_handle, msg, w, l)
-                                        } else {
-                                            child_handle.default_window_proc(msg, w, l)
-                                        };
-                                    }
-                                    BN_DBLCLK => {
-                                        println!("Button BN_DBLCLK")
-                                    }
-                                    BN_PUSHED => {
-                                        println!("Button BN_PUSHED")
-                                    }
-                                    _ => {
-                                        println!("Button WUT?")
-                                    }
-                                },
-                                "Edit" => match message {
-                                    EN_CHANGE => {
-                                        println!("Edit EN_CHANGE")
-                                    }
-                                    _ => {
-                                        println!("Edit WUT?")
-                                    }
-                                },
-                                _ => {
-                                    println!("WM_COMMAND WUT? WUT?")
-                                }
-                            };
-
-                            true
-                        }
-                        _ => false,
-                    };
-
-                    if handled {
-                        LRESULT::default()
-                    } else {
-                        hwnd.default_window_proc(msg, w, l)
-                    }
-                },
-            ));
         }
 
         let handel = HWND::create_window(
@@ -283,7 +226,7 @@ impl HwndBuilder {
             height,
             parent,
             None,
-            messages_handler,
+            self.on_message_callback,
         );
 
         if self.parent.is_some() {
@@ -370,5 +313,143 @@ impl Display for Droppable {
 impl Drop for Droppable {
     fn drop(&mut self) {
         println!("(> Dropping {})", self.name);
+    }
+}
+
+#[derive(Debug)]
+pub struct PointerInfo {
+    pub pointerId: PointerId,
+    pub frameId: u32,
+    pub location: POINT,
+    pub time: u32,
+    pub pointerType: PointerType,
+}
+
+/// hover state?
+/// in hover state Pen don't have pressure, tilt and rotation
+/// I don't know
+#[derive(Debug)]
+pub struct PenEvent {
+    pub pressure: u32,
+    pub tilt: (i32, i32),
+    pub rotation: u32,
+}
+
+#[derive(Debug)]
+pub struct MouseEvent {}
+
+#[derive(Debug)]
+pub struct TouchEvent {}
+
+#[derive(Debug)]
+pub enum PointerType {
+    Pointer,
+    Touch(TouchEvent),
+    Pen(PenEvent),
+    Mouse(MouseEvent),
+    Touchpad,
+}
+
+#[derive(Debug)]
+pub struct PointerId(u32);
+
+impl PointerId {
+    pub fn new(w: WPARAM) -> Self {
+        PointerId(w.get_loword())
+    }
+
+    pub fn get_pointer_type(&self) -> POINTER_INPUT_TYPE {
+        let mut pointer_input_type = POINTER_INPUT_TYPE::default();
+
+        unsafe { GetPointerType(self.0, &mut pointer_input_type) };
+
+        pointer_input_type
+    }
+
+    pub fn point_type(pointer_input_type: POINTER_INPUT_TYPE) -> &'static str {
+        match pointer_input_type {
+            PT_POINTER => "pointer",
+            PT_TOUCH => "touch",
+            PT_PEN => "pen",
+            PT_MOUSE => "mouse",
+            PT_TOUCHPAD => "touchpad",
+            _ => "unknown",
+        }
+    }
+
+    pub fn get_pointer_info(&self) -> POINTER_INFO {
+        let mut pointer_info = POINTER_INFO::default();
+
+        unsafe { GetPointerInfo(self.0, &mut pointer_info) };
+
+        pointer_info
+    }
+
+    pub fn get_pointer_pen_info(&self) -> POINTER_PEN_INFO {
+        let mut pointer_pen_info = POINTER_PEN_INFO::default();
+
+        let succeeds = unsafe { GetPointerPenInfo(self.0, &mut pointer_pen_info) };
+
+        if !succeeds.as_bool() {
+            println!("GetPointerPenInfo {:?}", last_error());
+            panic!();
+        }
+
+        pointer_pen_info
+    }
+
+    pub fn get_pointer_frame_pen_info(&self) -> (POINTER_PEN_INFO, u32) {
+        let mut pointer_pen_info = POINTER_PEN_INFO::default();
+        let mut pointer_count = 0;
+
+        let result = unsafe {
+            GetPointerFramePenInfo(self.0, &mut pointer_count, Some(&mut pointer_pen_info))
+        };
+
+        (pointer_pen_info, pointer_count)
+    }
+
+    pub fn get_pointer_touch_info(&self) -> POINTER_TOUCH_INFO {
+        let mut pointer_touch_info = POINTER_TOUCH_INFO::default();
+
+        let succeeds = unsafe { GetPointerTouchInfo(self.0, &mut pointer_touch_info) };
+
+        if !succeeds.as_bool() {
+            println!("GetPointerTouchInfo {:?}", last_error());
+            panic!();
+        }
+
+        pointer_touch_info
+    }
+
+    pub fn get_pointer_frame_touch_info(&self) -> (POINTER_TOUCH_INFO, u32) {
+        let mut pointer_touch_info = POINTER_TOUCH_INFO::default();
+        let mut pointer_count = 0;
+
+        let result = unsafe {
+            GetPointerFrameTouchInfo(self.0, &mut pointer_count, Some(&mut pointer_touch_info))
+        };
+
+        println!("PT_TOUCH GetPointerFrameTouchInfo {:?}", result);
+
+        println!("PT_TOUCH GetLastError {:?}", unsafe { GetLastError() });
+
+        (pointer_touch_info, pointer_count)
+    }
+}
+
+trait PointerInputTypeEx {
+    fn get_pointer_type(pointerid: u32) -> POINTER_INPUT_TYPE;
+}
+
+impl PointerInputTypeEx for POINTER_INPUT_TYPE {
+    fn get_pointer_type(pointerid: u32) -> POINTER_INPUT_TYPE {
+        let mut pointer_input_type = POINTER_INPUT_TYPE::default();
+
+        unsafe {
+            GetPointerType(pointerid, &mut pointer_input_type);
+        }
+
+        pointer_input_type
     }
 }

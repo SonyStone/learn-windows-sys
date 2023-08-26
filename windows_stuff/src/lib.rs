@@ -111,7 +111,7 @@ fn app_win_proc(window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> L
                 PostQuitMessage(0);
                 LRESULT(0)
             }
-            _ => window.default_window_proc(message, wparam, lparam),
+            _ => window.default_window_procedure(message, wparam, lparam),
         }
     }
 }

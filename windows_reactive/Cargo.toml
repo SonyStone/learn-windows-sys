@@ -13,7 +13,8 @@ features = [
     "Win32_System_LibraryLoader",
     "Win32_Graphics_Gdi",
     "Win32_UI_Controls",
-    "Win32_Graphics_Dwm"
+    "Win32_Graphics_Dwm",
+    "Win32_UI_Input_Pointer"
 ]
 [dependencies]
 bitflags = "2.2.1"
