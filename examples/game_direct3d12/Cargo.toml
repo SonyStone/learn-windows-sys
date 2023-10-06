@@ -1,5 +1,5 @@
 [package]
-name = "basic_window"
+name = "game_direct3d12"
 version = "0.1.0"
 edition = "2021"
 

@@ -1,5 +1,5 @@
 [package]
-name = "basic_window"
+name = "test_tokio"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,3 +9,4 @@ windows_reactive = { path = "../../windows_reactive" }
 number_into_words = { path = "../../number_into_words" }
 rand = "0.8.5"
 glam = "0.24.1"
+tokio = { version = "1", features = ["full"] }

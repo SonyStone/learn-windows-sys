@@ -1,3 +1,4 @@
+use glam::{IVec2, Vec2};
 use windows::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
     UI::WindowsAndMessaging::*,
@@ -33,7 +34,7 @@ struct HitTest {
 }
 
 impl HitTest {
-    fn determine_poitnt(mut self, mouse_point: POINT, window_rect: RECT, frame_rect: RECT) -> Self {
+    fn determine_poitnt(mut self, mouse_point: IVec2, window_rect: RECT, frame_rect: RECT) -> Self {
         // Determine if the point is at the top or bottom of the window.
 
         if mouse_point.y >= window_rect.top && mouse_point.y < window_rect.top + TOPEXTENDWIDTH {

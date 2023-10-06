@@ -1,3 +1,4 @@
+use glam::{IVec2, Vec2};
 use windows::{
     core::IntoParam,
     Win32::{
@@ -393,10 +394,16 @@ pub trait WindowHandleExt: WindowHandleGetter {
         self.show_window(SW_FORCEMINIMIZE);
     }
 
-    fn screen_to_client(&self, point: &POINT) -> POINT {
-        let mut point = *point;
+    fn screen_to_client(&self, point: &IVec2) -> IVec2 {
+        let mut point = POINT {
+            x: point.x,
+            y: point.y,
+        };
         unsafe { ScreenToClient(*self.get_handle(), &mut point) };
-        point
+        IVec2 {
+            x: point.x,
+            y: point.y,
+        }
     }
 
     fn begin_paint(&self, paint_struct: &mut PAINTSTRUCT) -> HDC {

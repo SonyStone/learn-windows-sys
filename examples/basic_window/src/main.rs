@@ -1,19 +1,14 @@
+use glam::IVec2;
 use leptos_reactive::{SignalGet, SignalUpdate};
 use number_into_words::encode;
 use windows_reactive::{
     device_context_ext::DeviceContextExt,
-    hwnd_builder::{
-        create_window_handle, Callback, MouseEvent, PenEvent, PointerId, PointerInfo, PointerType,
-        TouchEvent,
-    },
+    hwnd_builder::{create_window_handle, Callback},
     message_ext::dispatch_thread_events,
-    param_ext::{LParamExt, ParamExt},
+    messages::{message_handler, Command, Message, PointerType},
     pre_settings,
     window_handle_ext::WindowHandleExt,
-    PostQuitMessage, BN_CLICKED, BN_DBLCLK, BN_PUSHED, COLORREF, EN_CHANGE, HDC, HWND, LRESULT,
-    PAINTSTRUCT, PT_MOUSE, PT_PEN, PT_POINTER, PT_TOUCH, PT_TOUCHPAD, WM_CLOSE, WM_COMMAND,
-    WM_CREATE, WM_DESTROY, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_PAINT, WM_POINTERDOWN,
-    WM_POINTERUP, WM_POINTERUPDATE, WM_RBUTTONDOWN,
+    PostQuitMessage, COLORREF, HDC, HWND, PAINTSTRUCT,
 };
 
 pub fn main() {
@@ -50,17 +45,18 @@ pub fn main() {
             .always_on_top()
             .visible()
             .on_message(move |hwnd, msg, w, l| {
-                match msg {
-                    WM_CREATE => {
+                let message = message_handler(hwnd, msg, w, l);
+                match message {
+                    Message::Create(_) => {
                         println!("WM_CREATE");
                         hwnd.handled()
                     }
-                    WM_CLOSE => {
+                    Message::Close => {
                         println!("WM_CLOSE");
                         hwnd.hide();
                         hwnd.default_window_procedure(msg, w, l)
                     }
-                    WM_PAINT => {
+                    Message::Paint => {
                         index += 1;
                         println!("WM_PAINT {}", index);
 
@@ -75,7 +71,7 @@ pub fn main() {
                             for i in 0..1000 {
                                 let x = rand::random::<i32>() % r.right;
                                 let y = rand::random::<i32>() % r.bottom;
-                                hdc.set_pixel(x, y, COLORREF(0300));
+                                hdc.set_pixel(IVec2 { x, y }, COLORREF(0300));
                             }
 
                             hwnd.end_paint(&mut ps);
@@ -83,152 +79,73 @@ pub fn main() {
                             hwnd.default_window_procedure(msg, w, l)
                         }
                     }
-                    WM_POINTERDOWN | WM_POINTERUPDATE | WM_POINTERUP => {
-                        let pointer_id = PointerId::new(w);
-                        let pointer_input_type = pointer_id.get_pointer_type();
-                        let pointer_info = pointer_id.get_pointer_info();
-                        let pointer_info = match pointer_input_type {
-                            PT_POINTER => PointerInfo {
-                                pointerId: pointer_id,
-                                location: hwnd.screen_to_client(&pointer_info.ptPixelLocation),
-                                time: pointer_info.dwTime,
-                                frameId: pointer_info.frameId,
-                                pointerType: PointerType::Pointer,
-                            },
-                            PT_TOUCH => {
-                                let pointer_touch_info = pointer_id.get_pointer_touch_info();
-
-                                PointerInfo {
-                                    pointerId: pointer_id,
-                                    location: hwnd.screen_to_client(&pointer_info.ptPixelLocation),
-                                    time: pointer_info.dwTime,
-                                    frameId: pointer_info.frameId,
-                                    pointerType: PointerType::Touch(TouchEvent {}),
-                                }
-                            }
-                            PT_PEN => {
-                                let pointer_pen_info = pointer_id.get_pointer_pen_info();
-
-                                PointerInfo {
-                                    pointerId: pointer_id,
-                                    location: hwnd.screen_to_client(&pointer_info.ptPixelLocation),
-                                    time: pointer_info.dwTime,
-                                    frameId: pointer_info.frameId,
-                                    pointerType: PointerType::Pen(PenEvent {
-                                        pressure: pointer_pen_info.pressure,
-                                        tilt: (pointer_pen_info.tiltX, pointer_pen_info.tiltY),
-                                        rotation: pointer_pen_info.rotation,
-                                    }),
-                                }
-                            }
-                            PT_MOUSE => PointerInfo {
-                                pointerId: pointer_id,
-                                location: hwnd.screen_to_client(&pointer_info.ptPixelLocation),
-                                time: pointer_info.dwTime,
-                                frameId: pointer_info.frameId,
-                                pointerType: PointerType::Mouse(MouseEvent {}),
-                            },
-                            PT_TOUCHPAD => PointerInfo {
-                                pointerId: pointer_id,
-                                location: hwnd.screen_to_client(&pointer_info.ptPixelLocation),
-                                time: pointer_info.dwTime,
-                                frameId: pointer_info.frameId,
-                                pointerType: PointerType::Touchpad,
-                            },
-                            _ => {
-                                panic!()
-                            }
-                        };
-
+                    Message::PointerDown(pointer_info)
+                    | Message::PointerUpdate(pointer_info)
+                    | Message::PointerUp(pointer_info) => {
                         let hdc = HDC::get_device_context(&hwnd);
-
-                        match pointer_info.pointerType {
+                        match pointer_info.pointer_type {
                             PointerType::Pen(pen_event) => unsafe {
                                 let size = (pen_event.pressure / 10) as i32;
                                 hdc.ellipse(
-                                    pointer_info.location.x - size,
-                                    pointer_info.location.y - size,
-                                    pointer_info.location.x + size,
-                                    pointer_info.location.y + size,
+                                    pointer_info.local_position.x - size,
+                                    pointer_info.local_position.y - size,
+                                    pointer_info.local_position.x + size,
+                                    pointer_info.local_position.y + size,
                                 );
                             },
                             _ => unsafe {
-                                hdc.set_pixel(
-                                    pointer_info.location.x,
-                                    pointer_info.location.y,
-                                    COLORREF(0300),
-                                );
+                                hdc.set_pixel(pointer_info.local_position, COLORREF(0300));
                             },
                         }
-                        // unsafe { MoveToEx(hdc, 0, 0, None) };
-                        // unsafe {
-                        //     LineTo(hdc, pointer_info.location.x, pointer_info.location.y)
-                        // };
-                        hdc.release_device_context(&hwnd);
 
-                        // println!("pointer_info {:?}", pointer_info);
-                        // println!("----");
+                        hdc.release_device_context(&hwnd);
 
                         hwnd.handled()
                     }
-                    WM_DESTROY => {
+                    Message::Destroy => {
                         println!("WM_DESTROY");
                         unsafe {
                             PostQuitMessage(0);
                         }
                         hwnd.default_window_procedure(msg, w, l)
                     }
-                    WM_LBUTTONDOWN => {
+                    Message::LeftButtonDown => {
                         println!("WM_LBUTTONDOWN");
                         on_click(hwnd);
                         hwnd.handled()
                     }
-                    WM_RBUTTONDOWN => {
+                    Message::RightButtonDown => {
                         println!("WM_RBUTTONDOWN");
                         on_right_click(hwnd);
                         hwnd.handled()
                     }
-                    WM_LBUTTONDBLCLK => {
+                    Message::LeftButtondDoubleClick => {
                         println!("WM_LBUTTONDBLCLK");
                         hwnd.handled()
                     }
-                    WM_COMMAND => {
-                        let child_handle = l.get_child_handle();
-                        let message = w.get_hiword();
-
-                        let class_name = child_handle.get_class_name();
-
-                        match &class_name as &str {
-                            "Button" => match message {
-                                BN_CLICKED => {
-                                    if let Some(click) = child_handle.get_user_data::<Callback>() {
-                                        click.0(child_handle, msg, w, l)
-                                    } else {
-                                        child_handle.default_window_procedure(msg, w, l)
-                                    };
-                                }
-                                BN_DBLCLK => {
-                                    println!("Button BN_DBLCLK")
-                                }
-                                BN_PUSHED => {
-                                    println!("Button BN_PUSHED")
-                                }
-                                _ => {
-                                    println!("Button WUT?")
-                                }
-                            },
-                            "Edit" => match message {
-                                EN_CHANGE => {
-                                    println!("Edit EN_CHANGE")
-                                }
-                                _ => {
-                                    println!("Edit WUT?")
-                                }
-                            },
+                    Message::Command(command_info) => {
+                        match command_info.command {
+                            Command::Clicked => {
+                                if let Some(click) = command_info.handle.get_user_data::<Callback>()
+                                {
+                                    click.0(command_info.handle, msg, w, l)
+                                } else {
+                                    command_info.handle.default_window_procedure(msg, w, l)
+                                };
+                            }
+                            Command::DoubleClick => {
+                                println!("Button BN_DBLCLK")
+                            }
+                            Command::Pushed => {
+                                println!("Button BN_PUSHED")
+                            }
+                            Command::Change => {
+                                println!("Edit EN_CHANGE")
+                            }
                             _ => {
                                 println!("WM_COMMAND WUT? WUT?")
                             }
-                        };
+                        }
 
                         hwnd.handled()
                     }

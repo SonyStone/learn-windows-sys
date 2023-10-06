@@ -42,8 +42,14 @@ impl MessageExt for MSG {
 
         while message.get_message().into() {
             if !message.is_dialog_message() {
+                // println!("message");
                 message.translate_message();
                 message.dispatch_message();
+            } else {
+                // ? game tick should go here?
+                // print!("\x1B[2J");
+                // tick += 1;
+                // println!("Tick {}", tick);
             }
         }
     }

@@ -14,7 +14,20 @@ features = [
     "Win32_Graphics_Gdi",
     "Win32_UI_Controls",
     "Win32_Graphics_Dwm",
-    "Win32_UI_Input_Pointer"
+    "Win32_UI_Input_Pointer",
+    "Win32_Graphics_Direct2D", # Direct2D
+    "Win32_Graphics_Direct2D_Common", # Direct2D
+    "Win32_Graphics_Dxgi", # Direct2D
+    "Win32_Graphics_Dxgi_Common", # Direct2D
+    "Win32_Graphics_Direct3D", # Direct2D
+    "Win32_Graphics_Direct3D11", # Direct2D
+    "Win32_Graphics_Direct3D12", # Direct3D12
+    "Win32_UI_Animation", # Direct2D
+    "Win32_System_Com", # Direct2D
+    "Win32_System_Performance", # Direct2D
+    "Foundation_Numerics", # Direct2D
+    "Win32_System_SystemServices"
 ]
 [dependencies]
-bitflags = "2.2.1"
+bitflags = "2.3.3"
+glam = "0.24.1"

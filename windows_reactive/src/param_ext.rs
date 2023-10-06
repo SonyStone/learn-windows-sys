@@ -1,5 +1,6 @@
 use std::mem::transmute;
 
+use glam::IVec2;
 use windows::Win32::{
     Foundation::{HWND, LPARAM, POINT, WPARAM},
     UI::WindowsAndMessaging::CREATESTRUCTW,
@@ -11,8 +12,8 @@ pub trait ParamExt {
     fn get_x(&self) -> i32;
     fn get_y(&self) -> i32;
 
-    fn get_point(&self) -> POINT {
-        POINT {
+    fn get_point(&self) -> IVec2 {
+        IVec2 {
             x: self.get_x(),
             y: self.get_y(),
         }

@@ -10,7 +10,10 @@ members = [
     'signal',
     'signal/examples/web_signal',
     'examples/basic_window',
-    'windows_xaml'
+    'examples/direct_2d',
+    'examples/game_direct3d12',
+    'examples/test_tokio',
+    'windows_xaml',
 ]
 
 [dependencies]
