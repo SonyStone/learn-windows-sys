@@ -22,8 +22,8 @@ use windows::Win32::{
             PT_MOUSE, PT_PEN, PT_POINTER, PT_TOUCH, PT_TOUCHPAD, WM_ACTIVATE, WM_CLOSE, WM_COMMAND,
             WM_CREATE, WM_DESTROY, WM_DISPLAYCHANGE, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN,
             WM_MOUSEWHEEL, WM_PAINT, WM_POINTERDOWN, WM_POINTERENTER, WM_POINTERHWHEEL,
-            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_RBUTTONDOWN,
-            WM_SIZE, WM_USER,
+            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_QUIT,
+            WM_RBUTTONDOWN, WM_SIZE, WM_USER,
         },
     },
 };
@@ -34,26 +34,67 @@ use crate::{
     window_handle_ext::WindowHandleExt,
 };
 
+/// First messages on window creation
+/// - (36) - WM_GETMINMAXINFO
+/// - (129) - WM_NCCREATE
+/// - (131) - WM_NCCALCSIZE -- first that goes to user to handle
+/// - (1) - WM_CREATE
+/// - (24) - WM_SHOWWINDOW
+/// - (70) - WM_WINDOWPOSCHANGING
+/// - (70) - WM_WINDOWPOSCHANGING
+/// - (28) - WM_ACTIVATEAPP
+/// - (134) - WM_NCACTIVATE
+/// - (127) - WM_GETICON
+/// - (127) - WM_GETICON
+/// - (127) - WM_GETICON
+/// - (6) - WM_ACTIVATE
+/// - (641) - WM_IME_SETCONTEXT
+/// - (642) - WM_IME_NOTIFY
+/// - (61) - WM_GETOBJECT
+/// - (61) - WM_GETOBJECT
+/// - (7) - WM_SETFOCUS
+/// - (133) - WM_NCPAINT
+/// - (20) - WM_ERASEBKGND
+/// - (71) - WM_WINDOWPOSCHANGED
+/// - (5) - WM_SIZE
+/// - (3) - WM_MOVE
+/// - (127) - WM_GETICON
+///  
+/// - (799) - WM_DWMNCRENDERINGCHANGED --- first thats gose into PeekMessageW
+/// - (49422) - ????
+/// - (127) - WM_GETICON
+/// - (18) - WM_QUIT
+///
 #[derive(Debug)]
 pub enum Message {
     /// WM_CREATE
+    /// (1)
     ///
     /// _wParam_ is not used
     ///
     /// _lParam_ pointer to a CREATESTRUCT
     Create(CREATESTRUCTW),
 
+    /// [WM_DESTROY](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-destroy)
+    /// (2)
+    ///
+    /// _wParam_ and _lParam_ are not used
+    Destroy,
+
     /// WM_CLOSE
+    /// (16)
     ///
     /// _wParam_ and _lParam_ are not used
     Close,
 
     /// WM_PAINT
+    /// (15)
     ///
     /// _wParam_ and _lParam_ are not used
     Paint,
 
     /// [WM_POINTERDOWN](https://github.com/MicrosoftDocs/win32/blob/docs/desktop-src/inputmsg/wm-pointerdown.md)
+    /// (582)
     ///
     /// _wParam_ is a lot of stuff
     ///
@@ -63,9 +104,11 @@ pub enum Message {
     PointerDown(PointerEvent),
 
     /// [WM_POINTERUPDATE](https://github.com/MicrosoftDocs/win32/blob/docs/desktop-src/inputmsg/wm-pointerupdate.md)
+    /// (581)
     PointerUpdate(PointerEvent),
 
     /// [WM_POINTERUP](https://github.com/MicrosoftDocs/win32/blob/docs/desktop-src/inputmsg/wm-pointerup.md)
+    /// (583)
     PointerUp(PointerEvent),
 
     /// [WM_POINTERENTER](https://github.com/MicrosoftDocs/win32/blob/docs/desktop-src/inputmsg/wm-pointerenter.md)
@@ -79,11 +122,6 @@ pub enum Message {
     /// Sent to a window when a pointer leaves detection range over the window (hover) or when a pointer moves
     /// outside the boundaries of the window.
     PointerLeave(PointerEvent),
-
-    /// [WM_DESTROY](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-destroy)
-    ///
-    /// _wParam_ and _lParam_ are not used
-    Destroy,
 
     /// [WM_LBUTTONDOWN](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-lbuttondown)
     ///
@@ -99,9 +137,11 @@ pub enum Message {
     LeftButtondDoubleClick,
 
     /// WM_COMMAND
+    /// (273)
     Command(CommandInfo),
 
     /// [WM_USER](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-user)
+    /// (1024)
     ///
     /// user-defined Windows messages
     /// Used to define private messages for use by private window classes,
@@ -109,24 +149,36 @@ pub enum Message {
     User,
 
     /// [WM_ACTIVATE](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-activate)
+    /// (6)
     ///
     /// Sent to both the window being activated and the window being deactivated.
     Activate,
 
     /// [WM_DISPLAYCHANGE](https://learn.microsoft.com/en-us/windows/win32/gdi/wm-displaychange)
+    /// (126)
     ///
     /// message is sent to all windows when the display resolution has changed.
     DisplayChange,
 
     /// [WM_SIZE](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-size)
+    /// (5)
     ///
     /// Sent to a window after its size has changed.
     Size,
 
     /// [WM_MOUSEWHEEL](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-mousewheel)
+    /// (522)
     ///
     /// Note: Pinch zoom gestures also triggers the MouseWheel event.
     MouseWheel(MouseWheelInfo),
+
+    /// [WM_QUIT](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-quit)
+    /// (18)
+    ///
+    /// Indicates a request to terminate an application, and is generated when the application
+    /// calls the PostQuitMessage function. This message causes the GetMessage function to
+    /// return zero.
+    Quit,
 
     Other,
 }
@@ -185,6 +237,7 @@ pub fn message_handler(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) -> Message {
         WM_DISPLAYCHANGE => Message::DisplayChange,
         WM_SIZE => Message::Size,
         WM_MOUSEWHEEL => Message::MouseWheel(mouse_wheel_message_handler(hwnd, msg, w, l)),
+        WM_QUIT => Message::Quit,
         _ => Message::Other,
     }
 }

@@ -24,7 +24,14 @@ use windows::{
 
 use super::dxgi_swap_chain::DXGISwapChain;
 
+#[derive(Debug)]
 pub struct Direct3D11Device(ID3D11Device);
+
+impl Drop for Direct3D11Device {
+    fn drop(&mut self) {
+        println!("🚮 Direct3D11Device dropped here")
+    }
+}
 
 impl Direct3D11Device {
     pub fn new() -> Result<Self> {

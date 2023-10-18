@@ -67,8 +67,6 @@ impl Game {
             }
         };
 
-        println!("adapter!");
-
         Ok(Game {
             command_queue: None,
             rtv_descriptor_heap: None,

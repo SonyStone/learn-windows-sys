@@ -1,17 +1,10 @@
-use std::fmt::Display;
-
 use windows::Win32::{
-    Foundation::{GetLastError, HWND, LPARAM, LRESULT, POINT, WPARAM},
+    Foundation::{HWND, LPARAM, LRESULT, WPARAM},
     UI::{
-        Input::Pointer::{
-            EnableMouseInPointer, GetPointerFramePenInfo, GetPointerFrameTouchInfo, GetPointerInfo,
-            GetPointerPenInfo, GetPointerTouchInfo, GetPointerType, POINTER_INFO, POINTER_PEN_INFO,
-            POINTER_TOUCH_INFO,
-        },
+        Input::Pointer::EnableMouseInPointer,
         WindowsAndMessaging::{
-            BS_FLAT, BS_PUSHBUTTON, CW_USEDEFAULT, POINTER_INPUT_TYPE, PT_MOUSE, PT_PEN,
-            PT_POINTER, PT_TOUCH, PT_TOUCHPAD, WINDOW_EX_STYLE, WINDOW_STYLE, WS_BORDER,
-            WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_ACCEPTFILES,
+            BS_FLAT, BS_PUSHBUTTON, CW_USEDEFAULT, WINDOW_EX_STYLE, WINDOW_STYLE, WM_NCCREATE,
+            WS_BORDER, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS, WS_EX_ACCEPTFILES,
             WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST,
             WS_EX_TRANSPARENT, WS_EX_WINDOWEDGE, WS_MAXIMIZE, WS_MAXIMIZEBOX, WS_MINIMIZE,
             WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_POPUP, WS_SIZEBOX, WS_SYSMENU, WS_VISIBLE,
@@ -19,22 +12,15 @@ use windows::Win32::{
     },
 };
 
-use crate::{errors::last_error, param_ext::ParamExt, window_handle_ext::WindowHandleExt};
+use crate::{param_ext::LParamExt, pre_settings, window_handle_ext::WindowHandleExt};
 
-pub struct Callback(pub Box<dyn FnMut(HWND, u32, WPARAM, LPARAM) -> LRESULT>);
+pub type OnCLick = Box<dyn Fn(HWND)>;
 
-impl Callback {
-    pub fn new(closure: impl FnMut(HWND, u32, WPARAM, LPARAM) -> LRESULT + 'static) -> Self {
-        Self(Box::new(closure))
-    }
-}
-
-pub struct OnCLick(pub Box<dyn Fn(HWND)>);
-
-pub struct OnMessage(pub Box<dyn FnMut(HWND, u32, WPARAM, LPARAM) -> LRESULT>);
+pub type OnMessage = Box<dyn FnMut(HWND, u32, WPARAM, LPARAM) -> LRESULT>;
 
 #[derive(Default)]
 pub struct HwndBuilder {
+    handle: HWND,
     class_name: String,
     text: Option<String>,
     size: Option<(i32, i32)>,
@@ -45,6 +31,12 @@ pub struct HwndBuilder {
     parent: Option<HWND>,
     style: WINDOW_STYLE,
     ex_style: WINDOW_EX_STYLE,
+}
+
+impl Drop for HwndBuilder {
+    fn drop(&mut self) {
+        println!("🚮 HwndBuilder dropped here")
+    }
 }
 
 impl HwndBuilder {
@@ -74,12 +66,12 @@ impl HwndBuilder {
     }
 
     pub fn on_click(mut self, f: impl Fn(HWND) + 'static) -> Self {
-        self.click_callback = Some(OnCLick(Box::new(f)));
+        self.click_callback = Some(Box::new(f));
         self
     }
 
     pub fn on_right_click(mut self, f: impl Fn(HWND) + 'static) -> Self {
-        self.right_click_callback = Some(OnCLick(Box::new(f)));
+        self.right_click_callback = Some(Box::new(f));
         self
     }
 
@@ -87,7 +79,7 @@ impl HwndBuilder {
         mut self,
         f: impl FnMut(HWND, u32, WPARAM, LPARAM) -> LRESULT + 'static,
     ) -> Self {
-        self.on_message_callback = Some(OnMessage(Box::new(f)));
+        self.on_message_callback = Some(Box::new(f));
         self
     }
 
@@ -182,24 +174,20 @@ impl HwndBuilder {
         self
     }
 
-    pub fn build(self) -> HWND {
-        let class_name = &self.class_name;
+    pub fn build(&mut self) -> HWND {
+        let class_name = &self.class_name.clone();
         let (width, height) = self.size.unwrap_or((CW_USEDEFAULT, CW_USEDEFAULT));
         let (x, y) = self.pos.unwrap_or((CW_USEDEFAULT, CW_USEDEFAULT));
         let window_name = &self.text.clone().unwrap_or("".to_string());
         let parent = self.parent.unwrap_or(HWND::default());
 
-        let mut click_callback = None;
-
         unsafe {
             EnableMouseInPointer(true);
         }
 
-        if self.parent.is_some() && self.click_callback.is_some() {
-            click_callback = Some(Box::into_raw(Box::new(self.click_callback.unwrap())));
-        }
+        pre_settings::init_window_class(class_name, Some(Self::window_proc));
 
-        let handel = HWND::create_window(
+        let handle = HWND::create_window_2(
             self.ex_style,
             class_name,
             window_name,
@@ -210,16 +198,54 @@ impl HwndBuilder {
             height,
             parent,
             None,
-            self.on_message_callback,
+            Some(self as *mut _ as _),
         );
 
+        debug_assert!(handle.0 != 0);
+        debug_assert!(handle == self.handle);
+
         if self.parent.is_some() {
-            if let Some(click_callback) = click_callback {
-                handel.set_user_data(click_callback);
-            };
+            handle.set_user_data(self as *mut _ as _);
         };
 
-        handel
+        handle
+    }
+
+    fn message_handler(
+        &mut self,
+        window: HWND,
+        message: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+    ) -> LRESULT {
+        self.on_message_callback.as_mut().unwrap()(window, message, wparam, lparam)
+    }
+
+    extern "system" fn window_proc(
+        window: HWND,
+        message: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+    ) -> LRESULT {
+        match message {
+            WM_NCCREATE => {
+                let this = lparam.get_create_struct().lpCreateParams as *mut Self;
+                window.set_user_data(this);
+                unsafe {
+                    (*this).handle = window;
+                }
+                window.default_window_procedure(message, wparam, lparam)
+            }
+            _ => window.get_user_data::<HwndBuilder>().map_or_else(
+                || window.default_window_procedure(message, wparam, lparam),
+                |this| {
+                    this.on_message_callback.as_mut().map_or_else(
+                        || window.default_window_procedure(message, wparam, lparam),
+                        |callback| callback(window, message, wparam, lparam),
+                    )
+                },
+            ),
+        }
     }
 }
 
@@ -229,7 +255,7 @@ pub fn create_window_handle() -> HwndBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::Droppable;
+    use crate::droppable::Droppable;
 
     #[derive(Default)]
     pub struct StructWithCallback {
@@ -265,37 +291,5 @@ mod tests {
         let some = binding.build();
 
         some(true);
-    }
-}
-
-pub struct Droppable {
-    name: String,
-}
-
-impl Droppable {
-    fn new(name: &str) -> Self {
-        Droppable {
-            name: name.to_string(),
-        }
-    }
-}
-
-impl Default for Droppable {
-    fn default() -> Self {
-        Droppable {
-            name: "default".to_string(),
-        }
-    }
-}
-
-impl Display for Droppable {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(> Still here {})", self.name)
-    }
-}
-
-impl Drop for Droppable {
-    fn drop(&mut self) {
-        println!("(> Dropping {})", self.name);
     }
 }

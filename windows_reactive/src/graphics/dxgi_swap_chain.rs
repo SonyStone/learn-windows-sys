@@ -1,42 +1,29 @@
 use windows::{
     core::Result,
-    Win32::Graphics::{
-        Direct2D::{
-            Common::{D2D1_ALPHA_MODE_IGNORE, D2D1_PIXEL_FORMAT},
-            D2D1_BITMAP_OPTIONS_CANNOT_DRAW, D2D1_BITMAP_OPTIONS_TARGET, D2D1_BITMAP_PROPERTIES1,
-        },
-        Dxgi::{
-            Common::{DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM},
-            IDXGISurface, IDXGISwapChain1,
-        },
-    },
+    Win32::Graphics::Dxgi::{Common::DXGI_FORMAT, IDXGISurface, IDXGISwapChain1},
 };
 
-use super::direct_2d_device_context::Direct2DDeviceContext;
+use super::device_context::DeviceContext;
 
+#[derive(Debug)]
 pub struct DXGISwapChain(IDXGISwapChain1);
+
+impl Drop for DXGISwapChain {
+    fn drop(&mut self) {
+        println!("🚮 DXGISwapChain dropped here")
+    }
+}
 
 impl DXGISwapChain {
     pub fn new(swapcahin: IDXGISwapChain1) -> Self {
         DXGISwapChain(swapcahin)
     }
 
-    pub fn create_swapchain_bitmap(&self, target: &Direct2DDeviceContext) -> Result<()> {
+    pub fn create_swapchain_bitmap(&self, target: &DeviceContext) -> Result<()> {
         let surface: IDXGISurface = unsafe { self.0.GetBuffer(0)? };
 
-        let props = D2D1_BITMAP_PROPERTIES1 {
-            pixelFormat: D2D1_PIXEL_FORMAT {
-                format: DXGI_FORMAT_B8G8R8A8_UNORM,
-                alphaMode: D2D1_ALPHA_MODE_IGNORE,
-            },
-            dpiX: 96.0,
-            dpiY: 96.0,
-            bitmapOptions: D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
-            ..Default::default()
-        };
-
-        let bitmap = target.create_bitmap_from_dxgi_surface(&surface, Some(&props))?;
-        target.set_target(&bitmap);
+        let bitmap = target.create_bitmap_from_dxgi(&surface, 1.0)?;
+        target.set_target(&bitmap.inner);
 
         Ok(())
     }

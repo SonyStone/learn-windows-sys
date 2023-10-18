@@ -8,11 +8,12 @@ use windows::{
             Direct2D::{
                 Common::{D2D1_COLOR_F, D2D_POINT_2F, D2D_RECT_F},
                 ID2D1SolidColorBrush, ID2D1StrokeStyle, D2D1_BRUSH_PROPERTIES, D2D1_ELLIPSE,
+                D2D1_UNIT_MODE_DIPS,
             },
             Dxgi::{Common::DXGI_FORMAT_UNKNOWN, CreateDXGIFactory1, IDXGIFactory2},
         },
         System::{
-            Com::{CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED},
+            Com::{CoCreateInstance, CLSCTX_ALL},
             Performance::{QueryPerformanceCounter, QueryPerformanceFrequency},
         },
         UI::{
@@ -28,11 +29,14 @@ use windows::{
 use crate::{
     com_initialized,
     graphics::{
-        direct_2d_device_context::Direct2DDeviceContext, direct_2d_factory::Direct2DFactory,
-        direct_3d_device::Direct3D11Device, dxgi_swap_chain::DXGISwapChain,
+        brush::{Brush, SolidColorBrush},
+        device_context::DeviceContext,
+        direct_2d_factory::Direct2DFactory,
+        direct_3d_device::Direct3D11Device,
+        dxgi_swap_chain::DXGISwapChain,
     },
 };
-
+#[derive(Debug)]
 pub struct Direct2d {
     pub factory: Direct2DFactory,
     // ! What the purpose?
@@ -42,8 +46,8 @@ pub struct Direct2d {
     pub manager: IUIAnimationManager,
     pub variable: IUIAnimationVariable,
     pub frequency: i64,
-    pub dpi: Vec2,
-    pub target: Option<Direct2DDeviceContext>,
+    pub dpi: f32,
+    pub context: Option<DeviceContext>,
     pub brush: Option<ID2D1SolidColorBrush>,
     pub swapchain: Option<DXGISwapChain>,
     pub camera: Affine2,
@@ -53,12 +57,12 @@ pub struct Direct2d {
 }
 
 impl Direct2d {
-    pub fn new() -> Result<Direct2d> {
+    pub fn new() -> Result<Self> {
         com_initialized::com_initialized();
 
-        let factory = Direct2DFactory::create_factory()?;
+        let factory = Direct2DFactory::new()?;
         let dx_factory: IDXGIFactory2 = unsafe { CreateDXGIFactory1()? };
-        let style = factory.create_stroke_style()?;
+        let style = factory.create_stroke_style(None)?;
         let manager: IUIAnimationManager =
             unsafe { CoCreateInstance(&UIAnimationManager, None, CLSCTX_ALL)? };
 
@@ -89,7 +93,7 @@ impl Direct2d {
             frequency,
             variable,
             dpi,
-            target: None,
+            context: None,
             brush: None,
             swapchain: None,
             camera: Affine2::IDENTITY,
@@ -108,35 +112,40 @@ impl Direct2d {
             return Ok(());
         }
 
-        if self.target.is_none() {
+        if self.context.is_none() {
             let device = Direct3D11Device::new()?;
-            let target = self.factory.create_render_target(&device)?;
-            target.set_dpi(self.dpi);
+
+            let d2device = self.factory.create_device(&device)?;
+            let context = d2device.create_device_context()?;
+            context.set_unit_mode(D2D1_UNIT_MODE_DIPS);
+            context.set_dpi_scale(self.dpi);
 
             let swapchain = device.create_swapchain(self.handle.unwrap())?;
-            swapchain.create_swapchain_bitmap(&target)?;
 
-            self.brush = create_brush(&target).ok();
-            self.target = Some(target);
+            swapchain.create_swapchain_bitmap(&context)?;
+
+            self.brush = create_brush(&context).ok();
+            self.context = Some(context);
             self.swapchain = Some(swapchain);
         }
 
-        let target = self.target.as_ref().unwrap();
+        let context = self.context.as_ref().unwrap();
         let brush = self.brush.as_ref().unwrap();
         let swapchain = self.swapchain.as_ref().unwrap();
 
         // Draw
         {
-            target.begin_draw();
+            context.begin_draw();
 
-            target.clear(Some(&D2D1_COLOR_F {
+            context.clear(Some(&D2D1_COLOR_F {
                 r: 1.0,
                 g: 1.0,
                 b: 1.0,
                 a: 1.0,
             }));
 
-            target.set_transform(&self.camera);
+            context.set_transform(&self.camera);
+
             {
                 let radius = 50.0;
 
@@ -145,9 +154,10 @@ impl Direct2d {
                     radiusX: radius,
                     radiusY: radius,
                 };
-                target.draw_ellipse(&ellipse, brush, 5.0, None);
+                context.draw_ellipse(&ellipse, brush, 5.0, None);
             }
-            target.draw_rectangle(
+
+            context.draw_rectangle(
                 &D2D_RECT_F {
                     left: 100.0,
                     top: 100.0,
@@ -160,10 +170,10 @@ impl Direct2d {
             );
 
             if let Some(point_center) = self.point_center {
-                target.set_transform(&Affine2::default());
+                context.set_transform(&Affine2::default());
 
                 for touch in self.touches.iter() {
-                    target.draw_line((*touch, point_center), brush, 2.5, None);
+                    context.draw_line((*touch, point_center), brush, 2.5, None);
                     let point = D2D1_ELLIPSE {
                         point: D2D_POINT_2F {
                             x: touch.x,
@@ -172,7 +182,7 @@ impl Direct2d {
                         radiusX: 25.0,
                         radiusY: 25.0,
                     };
-                    target.draw_ellipse(&point, brush, 2.5, None);
+                    context.draw_ellipse(&point, brush, 2.5, None);
                 }
 
                 let point = D2D1_ELLIPSE {
@@ -184,10 +194,10 @@ impl Direct2d {
                     radiusY: 15.0,
                 };
 
-                target.draw_ellipse(&point, brush, 2.5, None);
+                context.draw_ellipse(&point, brush, 2.5, None);
             }
 
-            target.end_draw(None, None)?;
+            context.end_draw(None, None)?;
         }
 
         if let Err(error) = swapchain.present(1, 0) {
@@ -197,6 +207,7 @@ impl Direct2d {
                         .RegisterOcclusionStatusWindow(self.handle.unwrap(), WM_USER)?
                 };
             } else {
+                self.release_device();
             }
         }
 
@@ -204,7 +215,7 @@ impl Direct2d {
     }
 
     pub fn resize_swapchain_bitmap(&mut self) -> Result<()> {
-        if let Some(target) = &self.target {
+        if let Some(target) = &self.context {
             let swapchain = self.swapchain.as_ref().unwrap();
             target.set_target(None);
 
@@ -222,9 +233,15 @@ impl Direct2d {
     }
 
     pub fn release_device(&mut self) {
-        self.target = None;
+        self.context = None;
         self.swapchain = None;
         self.brush = None;
+    }
+}
+
+impl Drop for Direct2d {
+    fn drop(&mut self) {
+        println!("🚮 Direct2d dropped here")
     }
 }
 
@@ -244,7 +261,7 @@ fn get_time(frequency: i64) -> Result<f64> {
     }
 }
 
-fn create_brush(target: &Direct2DDeviceContext) -> Result<ID2D1SolidColorBrush> {
+fn create_brush(target: &DeviceContext) -> Result<ID2D1SolidColorBrush> {
     let color = D2D1_COLOR_F {
         r: 0.92,
         g: 0.38,
@@ -257,5 +274,7 @@ fn create_brush(target: &Direct2DDeviceContext) -> Result<ID2D1SolidColorBrush> 
         transform: Matrix3x2::identity(),
     };
 
-    target.create_solid_color_brush(&color, Some(&properties))
+    let brush = target.create_solid_color_brush(&color, Some(&properties))?;
+
+    Ok(brush)
 }

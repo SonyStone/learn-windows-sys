@@ -1,6 +1,7 @@
 pub mod com_initialized;
 pub mod device_context_ext;
 pub mod direct_2d;
+pub mod droppable;
 pub mod errors;
 pub mod game;
 mod graphics;
@@ -11,6 +12,7 @@ pub mod param_ext;
 pub mod pcwstr_handler;
 pub mod pre_settings;
 pub mod rect_ext;
+pub mod test;
 pub mod window_handle;
 pub mod window_handle_ext;
 mod window_handle_getter;

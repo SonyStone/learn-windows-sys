@@ -15,12 +15,12 @@ use windows::{
             WindowsAndMessaging::{
                 CreateWindowExW, DefWindowProcW, GetClassNameW, GetClientRect, GetWindowLongPtrW,
                 GetWindowPlacement, GetWindowRect, IsWindow, MoveWindow, PostMessageW,
-                SetWindowLongPtrW, SetWindowPlacement, SetWindowPos, SetWindowTextW, ShowWindow,
-                GWLP_HINSTANCE, GWLP_ID, GWLP_USERDATA, GWLP_WNDPROC, GWL_EXSTYLE, GWL_STYLE,
-                GWL_USERDATA, HMENU, SET_WINDOW_POS_FLAGS, SHOW_WINDOW_CMD, SW_FORCEMINIMIZE,
-                SW_HIDE, SW_MAXIMIZE, SW_MINIMIZE, SW_NORMAL, SW_RESTORE, SW_SHOW, SW_SHOWDEFAULT,
-                SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SW_SHOWMINNOACTIVE, SW_SHOWNA,
-                SW_SHOWNOACTIVATE, SW_SHOWNORMAL, WINDOWPLACEMENT, WINDOW_EX_STYLE,
+                PostQuitMessage, SetWindowLongPtrW, SetWindowPlacement, SetWindowPos,
+                SetWindowTextW, ShowWindow, GWLP_HINSTANCE, GWLP_ID, GWLP_USERDATA, GWLP_WNDPROC,
+                GWL_EXSTYLE, GWL_STYLE, GWL_USERDATA, HMENU, SET_WINDOW_POS_FLAGS, SHOW_WINDOW_CMD,
+                SW_FORCEMINIMIZE, SW_HIDE, SW_MAXIMIZE, SW_MINIMIZE, SW_NORMAL, SW_RESTORE,
+                SW_SHOW, SW_SHOWDEFAULT, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SW_SHOWMINNOACTIVE,
+                SW_SHOWNA, SW_SHOWNOACTIVATE, SW_SHOWNORMAL, WINDOWPLACEMENT, WINDOW_EX_STYLE,
                 WINDOW_LONG_PTR_INDEX, WINDOW_STYLE,
             },
         },
@@ -83,7 +83,7 @@ pub trait WindowHandleExt: WindowHandleGetter {
         height: i32,
         parent: P0,
         menu: P1,
-        l_param: Option<P2>,
+        mut l_param: Option<&mut P2>,
     ) -> HWND
     where
         P0: IntoParam<HWND>,
@@ -109,7 +109,50 @@ pub trait WindowHandleExt: WindowHandleGetter {
                 parent,
                 menu,
                 h_instance,
-                l_param.map(|l_param| l_param.into_l_param()),
+                l_param.as_mut().map(|l_param| l_param.into_l_param()),
+            );
+
+            handle
+        }
+    }
+
+    fn create_window_2<P0, P1>(
+        ex_style: WINDOW_EX_STYLE,
+        class_name: &str,
+        window_name: &str,
+        style: WINDOW_STYLE,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        parent: P0,
+        menu: P1,
+        l_param: Option<*const ::core::ffi::c_void>,
+    ) -> HWND
+    where
+        P0: IntoParam<HWND>,
+        P1: IntoParam<HMENU>,
+    {
+        unsafe {
+            let h_instance = get_current_instance();
+            let class_name = class_name.as_wide();
+            let window_name = window_name.as_wide();
+            // let menu = menu.into_param().abi();
+            // let parent = parent.into_param().abi();
+
+            let handle = CreateWindowExW(
+                ex_style,
+                class_name.as_pcwstr(),
+                window_name.as_pcwstr(),
+                style,
+                x,
+                y,
+                width,
+                height,
+                parent,
+                menu,
+                h_instance,
+                l_param,
             );
 
             handle
@@ -238,6 +281,10 @@ pub trait WindowHandleExt: WindowHandleGetter {
         P2: IntoParam<LPARAM>,
     {
         unsafe { PostMessageW(*self.get_handle(), msg, wparam, lparam) };
+    }
+
+    fn post_quit_message() {
+        unsafe { PostQuitMessage(0) };
     }
 
     fn update_window(&self) {
@@ -421,12 +468,11 @@ pub fn get_current_instance() -> HMODULE {
 }
 
 pub trait IntoLParam {
-    fn into_l_param(self) -> *const std::ffi::c_void;
+    fn into_l_param(&mut self) -> *const std::ffi::c_void;
 }
 
 impl<T> IntoLParam for T {
-    fn into_l_param(self) -> *const std::ffi::c_void {
-        let boxed_text = Box::new(self);
-        Box::into_raw(boxed_text) as *const std::ffi::c_void
+    fn into_l_param(&mut self) -> *const std::ffi::c_void {
+        self as *mut _ as _
     }
 }

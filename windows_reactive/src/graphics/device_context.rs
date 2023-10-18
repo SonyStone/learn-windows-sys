@@ -1,14 +1,17 @@
+use glam::{Affine2, Vec2};
 use windows::{
     core::{IntoParam, Result},
     Foundation::Numerics::Matrix3x2,
     Win32::Graphics::{
         Direct2D::{
-            Common::{D2D1_COLOR_F, D2D_POINT_2F, D2D_RECT_F, D2D_SIZE_F},
-            ID2D1Bitmap1, ID2D1Brush, ID2D1DeviceContext, ID2D1Geometry, ID2D1Image,
-            ID2D1SolidColorBrush, ID2D1StrokeStyle, D2D1_BITMAP_PROPERTIES1, D2D1_BRUSH_PROPERTIES,
-            D2D1_ELLIPSE, D2D1_UNIT_MODE,
+            Common::{
+                D2D1_ALPHA_MODE_IGNORE, D2D1_COLOR_F, D2D1_PIXEL_FORMAT, D2D_RECT_F, D2D_SIZE_F,
+            },
+            ID2D1Brush, ID2D1DeviceContext, ID2D1Image, ID2D1SolidColorBrush, ID2D1StrokeStyle,
+            D2D1_BITMAP_OPTIONS_CANNOT_DRAW, D2D1_BITMAP_OPTIONS_TARGET, D2D1_BITMAP_PROPERTIES1,
+            D2D1_BRUSH_PROPERTIES, D2D1_ELLIPSE, D2D1_UNIT_MODE,
         },
-        Dxgi::IDXGISurface,
+        Dxgi::{Common::DXGI_FORMAT_B8G8R8A8_UNORM, IDXGISurface},
     },
 };
 
@@ -48,9 +51,24 @@ use windows::{
 /// specifying the level of antialiasing and rendering modes.
 /// - __Resource Management__: `ID2D1DeviceContext` manages resources like brushes, bitmaps,
 /// and geometries. These resources can be created and reused to optimize rendering performance.
-pub struct Direct2DDeviceContext(pub(crate) ID2D1DeviceContext);
+#[derive(Debug)]
+pub struct DeviceContext(pub(crate) ID2D1DeviceContext);
 
-impl Direct2DDeviceContext {
+impl Drop for DeviceContext {
+    fn drop(&mut self) {
+        println!("🚮 DeviceContext dropped here")
+    }
+}
+
+impl DeviceContext {
+    /// Create a new device context from an existing COM object.
+    ///
+    /// Marked as unsafe because the device must be in a good state.
+    /// This *might* be overly conservative.
+    pub unsafe fn new(device_context: ID2D1DeviceContext) -> DeviceContext {
+        DeviceContext(device_context)
+    }
+
     /// Creates a bitmap that can be used as a target surface, for reading back to the CPU, or as a source for the
     /// DrawBitmap and ID2D1BitmapBrush APIs. In addition, color context information can be passed to the bitmap.
     pub fn create_bitmap() {
@@ -64,15 +82,34 @@ impl Direct2DDeviceContext {
     /// [CreateBitmapFromDxgiSurface](https://learn.microsoft.com/en-us/windows/win32/api/d2d1_1/nf-d2d1_1-id2d1devicecontext-createbitmapfromdxgisurface(idxgisurface_constd2d1_bitmap_properties1__id2d1bitmap1))
     ///
     /// Creates a bitmap from a DXGI surface that can be set as a target surface or have additional color context information specified.
-    pub fn create_bitmap_from_dxgi_surface<P0>(
-        &self,
-        surface: P0,
-        props: Option<*const D2D1_BITMAP_PROPERTIES1>,
-    ) -> Result<ID2D1Bitmap1>
+    ///
+    /// Most often, this bitmap will be used to set the target of a
+    /// DeviceContext.
+    ///
+    /// Assumes RGBA8 format and premultiplied alpha.
+    ///
+    /// The `unsafe` might be conservative, but we assume the `dxgi`
+    /// argument is in good shape to be a target.
+    pub fn create_bitmap_from_dxgi<P0>(&self, dxgi: P0, dpi_scale: f32) -> Result<Bitmap>
     where
         P0: IntoParam<IDXGISurface>,
     {
-        unsafe { self.0.CreateBitmapFromDxgiSurface(surface, props) }
+        let props = D2D1_BITMAP_PROPERTIES1 {
+            pixelFormat: D2D1_PIXEL_FORMAT {
+                format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                alphaMode: D2D1_ALPHA_MODE_IGNORE,
+            },
+            dpiX: 96.0 * dpi_scale,
+            dpiY: 96.0 * dpi_scale,
+            bitmapOptions: D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+            ..Default::default()
+        };
+        let bitmap = unsafe { self.0.CreateBitmapFromDxgiSurface(dxgi, Some(&props))? };
+
+        Ok(Bitmap {
+            inner: bitmap,
+            empty_image: false,
+        })
     }
 
     pub fn create_bitmap_from_wic_bitmap() {
@@ -97,8 +134,15 @@ impl Direct2DDeviceContext {
     /// of the resolution of a display or output device, and it affects how graphics and text are scaled
     /// and rendered. By setting the DPI, you can control the scaling behavior of your graphics to
     /// ensure they appear correctly on different display devices with varying DPI values.
-    pub fn set_dpi(&self, dpi: Vec2) {
-        unsafe { self.0.SetDpi(dpi.x, dpi.y) };
+    pub fn set_dpi_scale(&self, dpi_scale: f32) {
+        unsafe { self.0.SetDpi(96. * dpi_scale, 96. * dpi_scale) };
+    }
+
+    pub fn get_dpi_scale(&self) -> Vec2 {
+        let mut dpi = Vec2::ZERO;
+        unsafe { self.0.GetDpi(&mut dpi.x, &mut dpi.y) };
+        // https://docs.microsoft.com/en-us/windows/win32/direct2d/direct2d-and-high-dpi
+        dpi / 96.0
     }
 
     /// [SetTarget](https://learn.microsoft.com/en-us/windows/win32/api/d2d1_1/nf-d2d1_1-id2d1devicecontext-settarget)
@@ -126,59 +170,27 @@ impl Direct2DDeviceContext {
     pub fn set_unit_mode(&self, unitmode: D2D1_UNIT_MODE) {
         unsafe { self.0.SetUnitMode(unitmode) };
     }
-
-    pub fn draw_geometry<P0, P1, P2>(
-        &self,
-        geometry: P0,
-        brush: P1,
-        strokewidth: f32,
-        strokestyle: P2,
-    ) where
-        P0: IntoParam<ID2D1Geometry>,
-        P1: IntoParam<ID2D1Brush>,
-        P2: IntoParam<ID2D1StrokeStyle>,
-    {
-        unsafe {
-            self.0
-                .DrawGeometry(geometry, brush, strokewidth, strokestyle)
-        }
-    }
-
-    pub fn draw_line<P0, P1>(
-        &self,
-        point: (Vec2, Vec2),
-        brush: P0,
-        strokewidth: f32,
-        strokestyle: P1,
-    ) where
-        P0: IntoParam<ID2D1Brush>,
-        P1: IntoParam<ID2D1StrokeStyle>,
-    {
-        let point0 = D2D_POINT_2F {
-            x: point.0.x,
-            y: point.0.y,
-        };
-        let point1 = D2D_POINT_2F {
-            x: point.1.x,
-            y: point.1.y,
-        };
-        unsafe {
-            self.0
-                .DrawLine(point0, point1, brush, strokewidth, strokestyle)
-        }
-    }
-
-    pub fn set_transform(&self, transform: &Affine2) {
-        let mat = to_matrix3x2(transform);
-        unsafe { self.0.SetTransform(&mat) }
-    }
 }
 
 /// Part of `ID2D1RenderTarget` interface.
-impl Direct2DDeviceContext {
+///
+/// Draw stuff goes here
+impl DeviceContext {
+    /// Begin drawing.
+    ///
     /// Initiates drawing on this render target.
+    ///
+    /// This must be done before any piet drawing operations.
+    ///
+    /// There may be safety concerns (not clear what happens if the sequence
+    /// is not followed).
     pub fn begin_draw(&self) {
         unsafe { self.0.BeginDraw() };
+    }
+
+    /// End drawing.
+    pub fn end_draw(&self, tag1: Option<*mut u64>, tag2: Option<*mut u64>) -> Result<()> {
+        unsafe { self.0.EndDraw(tag1, tag2) }
     }
 
     /// Clears the drawing area to the specified color.
@@ -186,18 +198,83 @@ impl Direct2DDeviceContext {
         unsafe { self.0.Clear(clearcolor) };
     }
 
-    pub fn draw_ellipse<P0, P1>(
+    pub fn set_transform(&self, transform: &Affine2) {
+        let mat = affine_to_matrix3x2(transform);
+        unsafe { self.0.SetTransform(&mat) }
+    }
+
+    pub(crate) fn set_transform_identity(&mut self) {
+        let mat = affine_to_matrix3x2(&Affine2::IDENTITY);
+        unsafe { self.0.SetTransform(&mat) }
+    }
+
+    pub(crate) fn get_transform(&mut self) -> Affine2 {
+        let mut transform = Matrix3x2::identity();
+        unsafe { self.0.GetTransform(&mut transform) }
+        matrix3x2_to_affine(&transform)
+    }
+
+    pub(crate) fn fill_geometry(
+        &mut self,
+        geometry: &Geometry,
+        brush: &Brush,
+        opacity_brush: Option<&Brush>,
+    ) {
+        unsafe {
+            self.0
+                .FillGeometry(&geometry.0, &brush.0, opacity_brush.map(|f| &f.0))
+        };
+    }
+
+    pub fn draw_geometry<P2>(
+        &self,
+        geometry: &Geometry,
+        brush: &Brush,
+        stroke_width: f32,
+        stroke_style: Option<&StrokeStyle>,
+    ) {
+        unsafe {
+            self.0.DrawGeometry(
+                &geometry.0,
+                &brush.0,
+                stroke_width,
+                stroke_style.map(|f| &f.0),
+            )
+        }
+    }
+
+    pub fn draw_line<P0>(
+        &self,
+        point: (Vec2, Vec2),
+        brush: P0,
+        strokewidth: f32,
+        strokestyle: Option<&StrokeStyle>,
+    ) where
+        P0: IntoParam<ID2D1Brush>,
+    {
+        unsafe {
+            self.0.DrawLine(
+                vec2_to_point_2f(point.0),
+                vec2_to_point_2f(point.1),
+                brush,
+                strokewidth,
+                strokestyle.map(|f| &f.0),
+            )
+        }
+    }
+
+    pub fn draw_ellipse<P0>(
         &self,
         ellipse: *const D2D1_ELLIPSE,
         brush: P0,
         strokewidth: f32,
-        strokestyle: P1,
+        strokestyle: Option<&StrokeStyle>,
     ) where
         P0: IntoParam<ID2D1Brush>,
-        P1: IntoParam<ID2D1StrokeStyle>,
     {
         unsafe {
-            self.0.DrawEllipse(ellipse, brush, strokewidth, strokestyle);
+            self.0
+                .DrawEllipse(ellipse, brush, strokewidth, strokestyle.map(|f| &f.0));
         };
     }
 
@@ -216,21 +293,12 @@ impl Direct2DDeviceContext {
             self.0.DrawRectangle(rect, brush, strokewidth, strokestyle);
         };
     }
-
-    pub fn end_draw(&self, tag1: Option<*mut u64>, tag2: Option<*mut u64>) -> Result<()> {
-        unsafe { self.0.EndDraw(tag1, tag2) }
-    }
 }
 
-use glam::{Affine2, Vec2};
-
-fn to_matrix3x2(value: &Affine2) -> Matrix3x2 {
-    Matrix3x2 {
-        M11: value.matrix2.x_axis.x,
-        M12: value.matrix2.x_axis.y,
-        M21: value.matrix2.y_axis.x,
-        M22: value.matrix2.y_axis.y,
-        M31: value.translation.x,
-        M32: value.translation.y,
-    }
-}
+use super::{
+    bitmap::Bitmap,
+    brush::Brush,
+    conv::{affine_to_matrix3x2, matrix3x2_to_affine, vec2_to_point_2f},
+    geometry::Geometry,
+    stroke_style::StrokeStyle,
+};
